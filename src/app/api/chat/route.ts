@@ -1,10 +1,10 @@
+import { getCompanyConfig } from '@/lib/companyConfig';
+import { getResponseTemplate } from '@/lib/companyResponses';
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
 // レート制限のための変数
 const ipRateLimits = new Map<string, { count: number, resetTime: number }>();
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '10');
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1分
 
 // トピック抽出のためのプロンプト
 const TOPIC_EXTRACTION_PROMPT = `
@@ -55,6 +55,26 @@ JSON形式で以下の情報を返してください:
 
 export async function POST(req: NextRequest) {
   try {
+    // リクエストボディの解析
+    const body = await req.json();
+    
+    if (!body.messages || !Array.isArray(body.messages)) {
+      return NextResponse.json(
+        { error: '無効なリクエスト形式です。messagesフィールドが必要です。' },
+        { status: 400 }
+      );
+    }
+    
+    // 法人IDの取得（リクエストから取得、なければデフォルト）
+    const companyId = body.companyId || 'default';
+    
+    // 法人設定の取得
+    const companyConfig = await getCompanyConfig(companyId);
+    
+    // レート制限の設定を法人設定から取得
+    const RATE_LIMIT_MAX = companyConfig.rateLimit?.maxRequests || 10;
+    const RATE_LIMIT_WINDOW_MS = companyConfig.rateLimit?.windowMs || 60 * 1000; // 1分
+    
     // レート制限のチェック
     const ip = req.headers.get('x-forwarded-for') || 'unknown';
     const now = Date.now();
@@ -71,30 +91,29 @@ export async function POST(req: NextRequest) {
     }
     
     if (limit.count >= RATE_LIMIT_MAX) {
+      // 法人固有のレート制限エラーメッセージを取得
+      const rateLimitErrorMessage = await getResponseTemplate(
+        companyId,
+        'errors',
+        'rateLimit',
+        'リクエストが多すぎます。しばらく待ってから再試行してください。'
+      );
+      
       return NextResponse.json(
-        { error: 'レート制限を超えました。しばらく待ってから再試行してください。' },
+        { error: rateLimitErrorMessage },
         { status: 429 }
       );
     }
     
     limit.count++;
     
-    // リクエストボディの解析
-    const body = await req.json();
-    
-    if (!body.messages || !Array.isArray(body.messages)) {
-      return NextResponse.json(
-        { error: '無効なリクエスト形式です。messagesフィールドが必要です。' },
-        { status: 400 }
-      );
-    }
-    
     // メッセージの設定
     const messages = [...body.messages];
     const userContext = body.userContext || '';
     
     // システムメッセージの処理
-    const baseSystemPrompt = 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。朝（5時〜12時）は「おはようございます」、昼（12時〜17時）は「こんにちは」、夕方・夜（17時〜22時）は「こんばんは」、深夜（22時〜5時）は「お疲れ様です」と挨拶してください。';
+    // 法人固有のシステムプロンプトを使用
+    const baseSystemPrompt = companyConfig.systemPrompt || 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。';
     
     // ユーザーコンテキストがある場合は追加
     const systemPrompt = userContext 
@@ -151,8 +170,11 @@ export async function POST(req: NextRequest) {
           conversationContext
         );
         
+        // 法人設定からモデル設定を取得
+        const ambiguousExpressionModel = companyConfig.apiSettings?.ambiguousExpressionModel || 'gpt-4o';
+        
         const ambiguousResponse = await openai.chat.completions.create({
-          model: 'gpt-4o',  // より高度な理解のためにGPT-4を使用
+          model: ambiguousExpressionModel,
           messages: [
             { role: 'system', content: contextualPrompt },
             { role: 'user', content: latestUserMessage.content }
@@ -185,12 +207,17 @@ export async function POST(req: NextRequest) {
       }
     }
     
+    // 法人設定からモデル設定を取得
+    const chatModel = companyConfig.apiSettings?.chatModel || 'gpt-3.5-turbo';
+    const temperature = companyConfig.apiSettings?.temperature || 0.7;
+    const maxTokens = companyConfig.apiSettings?.maxTokens || 1000;
+    
     // OpenAI APIへのリクエスト
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: chatModel,
       messages: messages,
-      temperature: 0.7,
-      max_tokens: 1000,
+      temperature: temperature,
+      max_tokens: maxTokens,
     });
     
     // 会話からトピックを抽出（最後の5つのメッセージを使用）
@@ -203,8 +230,11 @@ export async function POST(req: NextRequest) {
         .join('\n');
       
       try {
+        // 法人設定からトピック抽出モデルを取得
+        const topicExtractionModel = companyConfig.apiSettings?.topicExtractionModel || 'gpt-3.5-turbo';
+        
         const topicResponse = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
+          model: topicExtractionModel,
           messages: [
             { role: 'system', content: TOPIC_EXTRACTION_PROMPT },
             { role: 'user', content: recentMessages }
@@ -236,7 +266,8 @@ export async function POST(req: NextRequest) {
       message: response.choices[0].message,
       usage: response.usage,
       topics: topics,
-      ambiguousExpression: ambiguousExpression
+      ambiguousExpression: ambiguousExpression,
+      companyId: companyId  // レスポンスに法人IDを含める
     });
     
   } catch (error: any) {
