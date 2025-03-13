@@ -6,251 +6,274 @@
     bottom: 20px;
     right: 20px;
     z-index: 1000;
-    /* CSS変数の定義 */
-    --primary-color: #0070c0;
-    --secondary-color: #e3f2fd;
-    --background-color: #f5f5f5;
-    --text-color: #333;
-    --highlight-color: #0070c0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
-.chatIcon {
-    position: relative;
-    width: 60px;
-    height: 60px;
-    background-color: var(--primary-color);
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-}
-
-.chatIcon svg {
-    width: 24px;
-    height: 24px;
-    fill: white;
-}
-
-.chatIconLabel {
-    position: absolute;
-    top: 50%;
-    right: 70px;
-    transform: translateY(-50%);
-    background-color: var(--primary-color);
+.chatButton {
+    background-color: #0070f3;
     color: white;
-    padding: 8px 15px;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    font-weight: bold;
-    white-space: nowrap;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    display: none;
+    border: none;
+    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
 }
 
-.chatIcon:hover .chatIconLabel {
-    display: block;
+.chatButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
-.expanded {
-    position: fixed;
-    bottom: 90px;
-    right: 20px;
+.chatContainer {
     width: 350px;
-    height: 450px;
+    height: 500px;
     background-color: white;
-    border-radius: 10px;
-    box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+    border-radius: 8px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.header {
-    background-color: var(--primary-color);
+.chatHeader {
+    background-color: #0070f3;
     color: white;
     padding: 15px;
-    font-weight: bold;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.header button {
+.chatTitle {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.chatControls {
+    display: flex;
+    gap: 10px;
+}
+
+.clearButton, .closeButton {
     background: none;
     border: none;
     color: white;
     cursor: pointer;
-    font-size: 1.2rem;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
 }
 
-.header div:last-child {
-    display: flex;
-    align-items: center;
-}
-
-.clearButton {
-    background: none;
-    border: none;
-    color: white;
-    cursor: pointer;
-    margin-right: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.7;
-    transition: opacity 0.3s;
-}
-
-.clearButton:hover {
-    opacity: 1;
+.clearButton:hover, .closeButton:hover {
+    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .closeButton {
-    background: none;
-    border: none;
-    color: white;
-    cursor: pointer;
-    font-size: 1.2rem;
+    font-size: 18px;
+    font-weight: bold;
 }
 
-.chatContainer {
+.chatMessages {
     flex: 1;
-    padding: 15px;
     overflow-y: auto;
-    background-color: #f9f9f9;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    background-color: #f5f5f5;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
 }
 
-.messageList {
+/* メッセージコンテナ - 最適なレイアウトのために追加 */
+.messagesContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+/* メッセージラッパー - メッセージ間の空間管理のために追加 */
+.messageWrapper {
+    width: 100%;
+    margin-bottom: 5px;
     display: flex;
     flex-direction: column;
 }
 
 .message {
-    margin-bottom: 15px;
-}
-
-.botMessage {
-    background-color: #e3f2fd;
-    padding: 10px 15px;
-    border-radius: 18px;
     max-width: 80%;
-    display: inline-block;
+    padding: 12px 16px;
+    border-radius: 18px;
+    word-break: break-word;
+    line-height: 1.5;
+    margin-bottom: 2px;
 }
 
 .userMessage {
-    background-color: var(--primary-color);
-    color: white;
-    padding: 10px 15px;
-    border-radius: 18px;
-    max-width: 80%;
-    display: inline-block;
-    text-align: left;
     align-self: flex-end;
-    margin-left: auto;
-}
-
-.inputContainer {
-    padding: 10px;
-    display: flex;
-    border-top: 1px solid #eee;
-    background-color: white;
-}
-
-.input {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 20px;
-    outline: none;
-    margin-right: 10px;
-}
-
-.sendButton {
-    width: 40px;
-    height: 40px;
-    background-color: var(--primary-color);
-    border: none;
-    border-radius: 50%;
+    background-color: #0070f3;
     color: white;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    border-bottom-right-radius: 4px;
 }
 
-.sendButton:hover {
-    opacity: 0.9;
-}
-
-.optionsContainer {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.optionButton {
+.botMessage {
+    align-self: flex-start;
     background-color: white;
-    border: 1px solid var(--primary-color);
-    color: var(--primary-color);
-    padding: 8px 12px;
-    border-radius: 15px;
-    cursor: pointer;
-    font-size: 0.9rem;
+    color: #333;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.optionButton:hover {
-    background-color: var(--secondary-color);
-}
-
-/* タイピングインジケーター */
+/* ローディングインジケーター */
 .typingIndicator {
-    display: flex;
     padding: 10px 15px;
-    background-color: #e3f2fd;
+    color: #666;
+    background-color: white;
     border-radius: 18px;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    max-width: fit-content;
+    margin-top: 15px;
     margin-bottom: 15px;
-    width: fit-content;
 }
 
-.typingIndicator span {
-    height: 8px;
-    width: 8px;
-    background-color: #333;
-    border-radius: 50%;
-    margin: 0 2px;
+.dot {
     display: inline-block;
-    opacity: 0.4;
-    animation: blink 1s infinite;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #666;
+    margin: 0 2px;
+    opacity: 0.6;
 }
 
-.typingIndicator span:nth-child(1) {
-    animation-delay: 0.2s;
+.dot:nth-child(1) {
+    animation: typingAnimation 1.4s infinite;
 }
 
-.typingIndicator span:nth-child(2) {
-    animation-delay: 0.4s;
+.dot:nth-child(2) {
+    animation: typingAnimation 1.4s 0.2s infinite;
 }
 
-.typingIndicator span:nth-child(3) {
-    animation-delay: 0.6s;
+.dot:nth-child(3) {
+    animation: typingAnimation 1.4s 0.4s infinite;
 }
 
-@keyframes blink {
-    50% {
+@keyframes typingAnimation {
+    0% {
+        transform: translateY(0px);
+        opacity: 0.6;
+    }
+    25% {
+        transform: translateY(-4px);
         opacity: 1;
+    }
+    50% {
+        transform: translateY(0px);
+        opacity: 0.6;
+    }
+    100% {
+        transform: translateY(0px);
+        opacity: 0.6;
     }
 }
 
+.chatInput {
+    padding: 15px;
+    display: flex;
+    gap: 10px;
+    border-top: 1px solid #eee;
+}
+
+.inputField {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    resize: none;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.inputField:focus {
+    border-color: #0070f3;
+    box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
+}
+
+.sendButton {
+    background-color: #0070f3;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0 15px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sendButton:hover {
+    background-color: #0058c7;
+}
+
+.sendButton:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* スクロールバーのスタイル */
+.chatMessages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chatMessages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.chatMessages::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.chatMessages::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+
 /* レスポンシブデザイン */
-@media (max-width: 768px) {
-    .expanded {
+@media (max-width: 480px) {
+    .chatContainer {
         width: 100%;
         height: 100%;
+        position: fixed;
         bottom: 0;
         right: 0;
         border-radius: 0;
     }
-} 
+    
+    .chatButton {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+/* ユーザーメッセージとボットメッセージの間に余白を確保 */
+.userMessage + .botMessage,
+.botMessage + .userMessage {
+    margin-top: 8px;
+}
+
+/* メッセージ末尾のマーカーのスタイル */
+.messagesEnd {
+    min-height: 10px;
+    width: 100%;
+    margin-top: 15px;
+}

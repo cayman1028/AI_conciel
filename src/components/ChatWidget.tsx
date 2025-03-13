@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  generateContextPrompt,
+  recordUserQuestion,
+  saveConversationTopics,
+  updateTopic
+} from '@/lib/userContext';
 import styles from '@/styles/ChatWidget.module.css';
 import { useEffect, useRef, useState } from 'react';
 
@@ -9,224 +15,342 @@ interface Message {
 }
 
 // ローカルストレージのキー
-const STORAGE_KEY_MESSAGES = 'aiConcierge_messages';
-const STORAGE_KEY_HISTORY = 'aiConcierge_history';
+const STORAGE_KEY_MESSAGES = 'chatbot_messages';
+const STORAGE_KEY_HISTORY = 'chatbot_history';
+
+// 時間帯に応じた挨拶を取得する関数
+const getTimeBasedGreeting = (): string => {
+  const hour = new Date().getHours();
+  
+  if (hour >= 5 && hour < 12) {
+    return 'おはようございます！AIコンシェルへようこそ。今日も素晴らしい一日になりますように。何かお手伝いできることはありますか？';
+  } else if (hour >= 12 && hour < 17) {
+    return 'こんにちは！AIコンシェルへようこそ。どのようにお手伝いできますか？';
+  } else if (hour >= 17 && hour < 22) {
+    return 'こんばんは！AIコンシェルへようこそ。今日一日お疲れ様でした。何かお手伝いできることはありますか？';
+  } else {
+    return 'お疲れ様です。AIコンシェルへようこそ。夜遅くまでご利用いただきありがとうございます。どのようにお手伝いできますか？';
+  }
+};
 
 export default function ChatWidget() {
-  // ローカルストレージからメッセージを読み込む
-  const loadMessagesFromStorage = (): Message[] => {
-    if (typeof window === 'undefined') return [{ text: 'こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？', isUser: false }];
-    
-    const storedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
-    return storedMessages 
-      ? JSON.parse(storedMessages) 
-      : [{ text: 'こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？', isUser: false }];
-  };
-
-  // ローカルストレージから会話履歴を読み込む
-  const loadHistoryFromStorage = () => {
-    if (typeof window === 'undefined') {
-      return [
-        { role: "system", content: "あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。" },
-        { role: "assistant", content: "こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？" }
-      ];
-    }
-    
-    const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
-    return storedHistory 
-      ? JSON.parse(storedHistory) 
-      : [
-          { role: "system", content: "あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。" },
-          { role: "assistant", content: "こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？" }
-        ];
-  };
-
-  const [messages, setMessages] = useState<Message[]>(loadMessagesFromStorage);
+  // 状態の初期化
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  // 会話履歴を保存
-  const [conversationHistory, setConversationHistory] = useState(loadHistoryFromStorage);
-
-  // メッセージが変更されたらローカルストレージに保存
+  const [isLoading, setIsLoading] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [userContextPrompt, setUserContextPrompt] = useState('');
+  
+  // メッセージの読み込み
+  const loadMessagesFromStorage = (): Message[] => {
+    if (typeof window === 'undefined') return [];
+    
+    const storedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
+    if (storedMessages) {
+      return JSON.parse(storedMessages);
+    }
+    
+    // 時間帯に応じたウェルカムメッセージ
+    return [
+      {
+        text: getTimeBasedGreeting(),
+        isUser: false
+      }
+    ];
+  };
+  
+  // 会話履歴の読み込み
+  const loadHistoryFromStorage = () => {
+    if (typeof window === 'undefined') return [];
+    
+    const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+    if (storedHistory) {
+      return JSON.parse(storedHistory);
+    }
+    
+    // デフォルトの会話履歴
+    const greeting = getTimeBasedGreeting();
+    return [
+      { role: 'system', content: 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。' },
+      { role: 'assistant', content: greeting }
+    ];
+  };
+  
+  // 初期化
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const storedMessages = loadMessagesFromStorage();
+    const storedHistory = loadHistoryFromStorage();
+    
+    // 保存されたメッセージがある場合はそれを表示
+    if (storedMessages.length > 0) {
+      setMessages(storedMessages);
+      setHistory(storedHistory);
+    } else {
+      // 初回表示時はウェルカムメッセージを表示
+      const greeting = getTimeBasedGreeting();
+      setMessages([{ text: greeting, isUser: false }]);
+      
+      setHistory([
+        { role: 'system', content: 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。' },
+        { role: 'assistant', content: greeting }
+      ]);
+    }
+  }, []);
+  
+  // メッセージの保存
+  useEffect(() => {
+    if (typeof window !== 'undefined' && messages.length > 0) {
       localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
     }
   }, [messages]);
-
-  // 会話履歴が変更されたらローカルストレージに保存
+  
+  // 履歴の保存
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(conversationHistory));
+    if (typeof window !== 'undefined' && history.length > 0) {
+      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
     }
-  }, [conversationHistory]);
-
+  }, [history]);
+  
+  // チャットの参照
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // メッセージ表示エリアの末尾への参照
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // 自動スクロール関数
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
   };
-
+  
+  // メッセージが変更されたら自動スクロール
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
-
-  // チャット履歴をクリアする関数
-  const clearChatHistory = () => {
-    const initialMessage = { text: 'こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？', isUser: false };
-    const initialHistory = [
-      { role: "system", content: "あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。" },
-      { role: "assistant", content: "こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？" }
-    ];
-    
-    setMessages([initialMessage]);
-    setConversationHistory(initialHistory);
-    
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify([initialMessage]));
-      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(initialHistory));
+  }, [messages, isLoading]);
+  
+  // ユーザーコンテキストの更新
+  useEffect(() => {
+    // 会話が始まったらユーザーコンテキストを生成
+    if (history.length > 1) {
+      const contextPrompt = generateContextPrompt();
+      setUserContextPrompt(contextPrompt);
     }
-  };
-
+  }, [history]);
+  
+  // メッセージの送信処理
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
-
-    // ユーザーメッセージを追加
-    setMessages(prev => [...prev, { text: inputValue, isUser: true }]);
-    const userInput = inputValue;
+    
+    const userMessage = inputValue.trim();
     setInputValue('');
-
-    // ユーザーメッセージを履歴に追加
-    const updatedHistory = [...conversationHistory, { role: "user", content: userInput }];
-    setConversationHistory(updatedHistory);
-
-    // タイピングインジケーターを表示
-    setIsTyping(true);
-
+    
+    // ユーザーの質問を記録
+    recordUserQuestion(userMessage);
+    
+    // ユーザーメッセージの追加
+    const newMessages = [
+      ...messages,
+      { text: userMessage, isUser: true }
+    ];
+    setMessages(newMessages);
+    
+    // 会話履歴の更新
+    const newHistory = [
+      ...history,
+      { role: 'user', content: userMessage }
+    ];
+    setHistory(newHistory);
+    
+    // スクロール位置を固定
+    scrollToBottom();
+    
+    // ローディング表示
+    setIsLoading(true);
+    
+    // 最新のユーザーコンテキストを生成
+    const contextPrompt = generateContextPrompt();
+    setUserContextPrompt(contextPrompt);
+    
     try {
-      // OpenAI APIにリクエスト
+      // APIリクエスト
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: updatedHistory }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newHistory,
+          userContext: contextPrompt
+        }),
       });
-
+      
       if (!response.ok) {
-        throw new Error('API request failed');
+        throw new Error('APIリクエストに失敗しました');
       }
-
+      
       const data = await response.json();
+      const assistantMessage = data.message.content;
+      const cleanedMessage = assistantMessage.trim();
       
-      // タイピングインジケーターを非表示
-      setIsTyping(false);
+      // ローディング表示を非表示
+      setIsLoading(false);
       
-      // ボットの応答を表示
-      const botResponse = data.content || "申し訳ありません、エラーが発生しました。";
-      setMessages(prev => [...prev, { text: botResponse, isUser: false }]);
+      // 応答メッセージを追加
+      setMessages([
+        ...newMessages,
+        { text: cleanedMessage, isUser: false }
+      ]);
       
-      // ボットの応答を履歴に追加
-      setConversationHistory([...updatedHistory, { role: "assistant", content: botResponse }]);
+      // トピックの保存
+      if (data.topics && Array.isArray(data.topics) && data.topics.length > 0) {
+        saveConversationTopics(data.topics);
+        if (data.topics[0]) {
+          updateTopic(data.topics[0], cleanedMessage.substring(0, 100) + '...');
+        }
+      }
+      
+      // 会話履歴の更新
+      setHistory([
+        ...newHistory,
+        { role: 'assistant', content: cleanedMessage }
+      ]);
+      
+      // メッセージ追加後にスクロール
+      setTimeout(scrollToBottom, 50);
+      
     } catch (error) {
-      console.error('Error:', error);
+      console.error('エラー:', error);
       
-      // タイピングインジケーターを非表示
-      setIsTyping(false);
+      setIsLoading(false);
+      setMessages([
+        ...newMessages,
+        { text: 'すみません、エラーが発生しました。もう一度お試しください。', isUser: false }
+      ]);
       
-      // エラー時はローカルで応答を生成
-      const fallbackResponses = [
-        'ありがとうございます。どのようなことでお困りですか？',
-        'ご質問ありがとうございます。詳細を教えていただけますか？',
-        'かしこまりました。他にお手伝いできることはありますか？',
-        '申し訳ありませんが、その質問にはお答えできません。他のご質問はありますか？',
-        'ご連絡ありがとうございます。担当者に確認して折り返しご連絡いたします。'
-      ];
-      
-      const fallbackResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      setMessages(prev => [...prev, { text: fallbackResponse, isUser: false }]);
-      
-      // フォールバック応答を履歴に追加
-      setConversationHistory([...updatedHistory, { role: "assistant", content: fallbackResponse }]);
+      // エラーメッセージ表示後にスクロール
+      setTimeout(scrollToBottom, 50);
     }
   };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  
+  // キー入力処理
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
   };
-
+  
+  // 履歴のクリア
+  const handleClearHistory = () => {
+    const greeting = getTimeBasedGreeting();
+    
+    // メッセージをクリア
+    setMessages([{ text: greeting, isUser: false }]);
+    
+    // ユーザーコンテキストをリセット
+    setUserContextPrompt('');
+    
+    // 履歴をリセット
+    setHistory([
+      { role: 'system', content: 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。' },
+      { role: 'assistant', content: greeting }
+    ]);
+    
+    // スクロールを最下部に
+    setTimeout(scrollToBottom, 50);
+  };
+  
+  // チャットウィジェットの表示状態が変わったときのスクロール処理
+  useEffect(() => {
+    if (isExpanded) {
+      // 少し遅延させてからスクロール（UIの更新を待つ）
+      setTimeout(scrollToBottom, 300);
+    }
+  }, [isExpanded]);
+  
   return (
     <div className={styles.chatWidget}>
-      {isExpanded ? (
-        <div className={styles.expanded}>
-          <div className={styles.header}>
-            <div>企業チャットサポート</div>
-            <div>
-              <button onClick={clearChatHistory} className={styles.clearButton} title="履歴をクリア">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="white">
-                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-                </svg>
+      {!isExpanded ? (
+        <button 
+          className={styles.chatButton}
+          onClick={() => setIsExpanded(true)}
+          aria-label="サポート"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </button>
+      ) : (
+        <div className={styles.chatContainer}>
+          <div className={styles.chatHeader}>
+            <div className={styles.chatTitle}>
+              AIコンシェル
+            </div>
+            <div className={styles.chatControls}>
+              <button 
+                onClick={handleClearHistory}
+                className={styles.clearButton}
+                aria-label="履歴をクリア"
+              >
+                履歴をクリア
               </button>
-              <button onClick={() => setIsExpanded(false)} className={styles.closeButton}>×</button>
+              <button 
+                onClick={() => setIsExpanded(false)}
+                className={styles.closeButton}
+                aria-label="閉じる"
+              >
+                ×
+              </button>
             </div>
           </div>
           
-          <div className={styles.chatContainer}>
-            <div className={styles.messageList}>
+          <div className={styles.chatMessages} ref={chatContainerRef}>
+            <div className={styles.messagesContainer}>
               {messages.map((message, index) => (
-                <div key={index} className={styles.message}>
-                  {message.isUser ? (
-                    <div className={styles.userMessage}>
-                      {message.text}
-                    </div>
-                  ) : (
-                    <div className={styles.botMessage}>
-                      {message.text}
-                    </div>
-                  )}
+                <div key={index} className={styles.messageWrapper}>
+                  <div 
+                    className={`${styles.message} ${message.isUser ? styles.userMessage : styles.botMessage}`}
+                  >
+                    {message.text}
+                  </div>
                 </div>
               ))}
               
-              {isTyping && (
+              {/* ローディング表示 */}
+              {isLoading && (
                 <div className={styles.typingIndicator}>
-                  <span></span>
-                  <span></span>
-                  <span></span>
+                  <span className={styles.dot}></span>
+                  <span className={styles.dot}></span>
+                  <span className={styles.dot}></span>
                 </div>
               )}
               
-              <div ref={messagesEndRef} />
+              {/* スクロール位置の参照ポイント */}
+              <div ref={messagesEndRef} className={styles.messagesEnd} />
             </div>
           </div>
-
-          <div className={styles.inputContainer}>
-            <input
-              type="text"
+          
+          <div className={styles.chatInput}>
+            <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               placeholder="メッセージを入力..."
-              className={styles.input}
+              rows={1}
+              className={styles.inputField}
             />
-            <button onClick={handleSendMessage} className={styles.sendButton}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="white">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
+            <button 
+              onClick={handleSendMessage}
+              className={styles.sendButton}
+              disabled={!inputValue.trim() || isLoading}
+              aria-label="送信"
+            >
+              送信
             </button>
           </div>
-        </div>
-      ) : (
-        <div className={styles.chatIcon} onClick={() => setIsExpanded(true)}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="white">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
-            <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
-          </svg>
-          <span className={styles.chatIconLabel}>サポート</span>
         </div>
       )}
     </div>
   );
-} 
+}

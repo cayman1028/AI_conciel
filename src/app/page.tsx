@@ -4,33 +4,20 @@ import ChatWidget from '@/components/ChatWidget';
 
 export default function Home() {
   return (
-    <>
-      <header>
-        <div className="header-container">
-          <div className="logo">AIコンシェル</div>
-          <nav>
-            <ul>
-              <li>ホーム</li>
-              <li>サービス</li>
-              <li>料金</li>
-              <li>お問い合わせ</li>
-            </ul>
-          </nav>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
+        <h1 className="text-4xl font-bold mb-8 text-center">AIコンシェル</h1>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-2xl font-semibold mb-4">AIチャットボット</h2>
+          <p className="text-gray-600 mb-4">
+            このチャットボットは、あなたの質問に答えるためのAIアシスタントです。
+            右下のサポートボタンをクリックして、チャットを開始してください。
+          </p>
         </div>
-      </header>
-
-      <main>
-        <section className="hero">
-          <h1>AIを活用したカスタマーサポートチャットボット</h1>
-          <p>AIコンシェルは、最新のAI技術を活用したチャットボットサービスです。お客様のサポート業務を効率化し、24時間365日の対応を可能にします。</p>
-        </section>
-      </main>
-
-      <footer>
-        <p>&copy; 2025 AIコンシェル. All rights reserved.</p>
-      </footer>
+      </div>
       
       <ChatWidget />
-    </>
+    </main>
   );
 } 
