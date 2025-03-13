@@ -22,11 +22,58 @@
     justify-content: center;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transition: all 0.3s ease;
+    position: relative;
 }
 
 .chatButton:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.chatButton::before {
+    content: "";
+    position: absolute;
+    left: -70px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.chatButton::after {
+    content: "";
+    position: absolute;
+    left: -10px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.chatButton:hover::before {
+    content: "サポート";
+    position: absolute;
+    left: -90px;
+    background-color: #0070f3;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    opacity: 1;
+    visibility: visible;
+}
+
+.chatButton:hover::after {
+    content: "";
+    position: absolute;
+    left: -10px;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 6px solid #0070f3;
+    opacity: 1;
+    visibility: visible;
 }
 
 .chatContainer {
