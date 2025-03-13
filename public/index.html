@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIコンシェル デモ</title>
+  <style>
+    /* リセットとベーススタイル */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+    }
+
+    body {
+      line-height: 1.6;
+      color: #333;
+      background-color: #f5f5f5;
+    }
+
+    /* ヘッダー */
+    header {
+      background-color: #0070c0;
+      color: white;
+      padding: 1rem;
+    }
+
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+
+    nav ul {
+      display: flex;
+      list-style: none;
+    }
+
+    nav li {
+      margin-left: 2rem;
+    }
+
+    /* メインコンテンツ */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .hero {
+      background-color: #f5f5f5;
+      padding: 4rem 2rem;
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .hero h1 {
+      font-size: 2rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.3;
+    }
+
+    .hero p {
+      margin-bottom: 2rem;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* チャットボットウィジェット */
+    .chat-widget-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+
+    .chat-icon {
+      position: relative;
+      width: 60px;
+      height: 60px;
+      background-color: #0070c0;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+
+    .chat-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .chat-icon-label {
+      position: absolute;
+      top: 50%;
+      right: 70px;
+      transform: translateY(-50%);
+      background-color: #0070c0;
+      color: white;
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      white-space: nowrap;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      display: none;
+    }
+
+    .chat-icon:hover .chat-icon-label {
+      display: block;
+    }
+
+    .chat-window {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 350px;
+      height: 450px;
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      display: none;
+    }
+
+    .chat-header {
+      background-color: #0070c0;
+      color: white;
+      padding: 15px;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-close {
+      cursor: pointer;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+    }
+
+    .message {
+      margin-bottom: 15px;
+    }
+
+    .bot-message {
+      background-color: #e3f2fd;
+      padding: 10px 15px;
+      border-radius: 18px;
+      max-width: 80%;
+      display: inline-block;
+    }
+
+    .user-message-container {
+      text-align: right;
+    }
+
+    .user-message {
+      background-color: #0070c0;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 18px;
+      max-width: 80%;
+      display: inline-block;
+      text-align: left;
+    }
+
+    .chat-input-area {
+      padding: 10px;
+      display: flex;
+      border-top: 1px solid #eee;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      outline: none;
+    }
+
+    .chat-send-btn {
+      width: 40px;
+      height: 40px;
+      background-color: #0070c0;
+      border: none;
+      border-radius: 50%;
+      margin-left: 10px;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .chat-send-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    /* フッター */
+    footer {
+      background-color: #333;
+      color: white;
+      padding: 2rem;
+      text-align: center;
+      margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <div class="logo">AIコンシェル</div>
+      <nav>
+        <ul>
+          <li>ホーム</li>
+          <li>サービス</li>
+          <li>料金</li>
+          <li>お問い合わせ</li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>AIを活用したカスタマーサポートチャットボット</h1>
+      <p>AIコンシェルは、最新のAI技術を活用したチャットボットサービスです。お客様のサポート業務を効率化し、24時間365日の対応を可能にします。</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 AIコンシェル. All rights reserved.</p>
+  </footer>
+  
+  <div class="chat-widget-container">
+    <div class="chat-icon" id="chat-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+        <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
+      </svg>
+      <span class="chat-icon-label">サポート</span>
+    </div>
+    
+    <div class="chat-window" id="chat-window">
+      <div class="chat-header">
+        <div>企業チャットサポート</div>
+        <div class="chat-close" id="chat-close">×</div>
+      </div>
+      
+      <div class="chat-messages" id="chat-messages">
+        <div class="message">
+          <div class="bot-message">こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？</div>
+        </div>
+      </div>
+      
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chat-input" placeholder="メッセージを入力...">
+        <button class="chat-send-btn" id="chat-send-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const chatIcon = document.getElementById('chat-icon');
+      const chatWindow = document.getElementById('chat-window');
+      const chatClose = document.getElementById('chat-close');
+      const chatMessages = document.getElementById('chat-messages');
+      const chatInput = document.getElementById('chat-input');
+      const chatSendBtn = document.getElementById('chat-send-btn');
+      
+      // 会話履歴を保存
+      let conversationHistory = [
+        { role: "system", content: "あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。" },
+        { role: "assistant", content: "こんにちは！当社のチャットボットへようこそ。どのようにお手伝いできますか？" }
+      ];
+      
+      // チャットアイコンクリック - チャットウィンドウを開く
+      chatIcon.addEventListener('click', function() {
+        chatWindow.style.display = 'flex';
+        chatIcon.style.display = 'none';
+      });
+      
+      // 閉じるボタンクリック - チャットウィンドウを閉じる
+      chatClose.addEventListener('click', function() {
+        chatWindow.style.display = 'none';
+        chatIcon.style.display = 'flex';
+      });
+      
+      // 送信ボタンクリック
+      chatSendBtn.addEventListener('click', sendMessage);
+      
+      // エンターキー押下で送信
+      chatInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          sendMessage();
+        }
+      });
+      
+      // メッセージ送信
+      function sendMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+        
+        // ユーザーメッセージを表示
+        addUserMessage(message);
+        chatInput.value = '';
+        
+        // ユーザーメッセージを履歴に追加
+        conversationHistory.push({ role: "user", content: message });
+        
+        // 「入力中...」を表示
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'message';
+        typingIndicator.innerHTML = `<div class="bot-message">入力中...</div>`;
+        typingIndicator.id = 'typing-indicator';
+        chatMessages.appendChild(typingIndicator);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // OpenAI APIにリクエスト
+        fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messages: conversationHistory }),
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('API request failed');
+          }
+          return response.json();
+        })
+        .then(data => {
+          // 「入力中...」を削除
+          const typingIndicator = document.getElementById('typing-indicator');
+          if (typingIndicator) {
+            typingIndicator.remove();
+          }
+          
+          // ボットの応答を表示
+          const botResponse = data.message || data.content || "申し訳ありません、エラーが発生しました。";
+          addBotMessage(botResponse);
+          
+          // ボットの応答を履歴に追加
+          conversationHistory.push({ role: "assistant", content: botResponse });
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          
+          // 「入力中...」を削除
+          const typingIndicator = document.getElementById('typing-indicator');
+          if (typingIndicator) {
+            typingIndicator.remove();
+          }
+          
+          // エラー時はローカルで応答を生成
+          const fallbackResponses = [
+            'ありがとうございます。どのようなことでお困りですか？',
+            'ご質問ありがとうございます。詳細を教えていただけますか？',
+            'かしこまりました。他にお手伝いできることはありますか？',
+            '申し訳ありませんが、その質問にはお答えできません。他のご質問はありますか？',
+            'ご連絡ありがとうございます。担当者に確認して折り返しご連絡いたします。'
+          ];
+          
+          const fallbackResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+          addBotMessage(fallbackResponse);
+          
+          // フォールバック応答を履歴に追加
+          conversationHistory.push({ role: "assistant", content: fallbackResponse });
+        });
+      }
+      
+      // ボットメッセージの追加
+      function addBotMessage(text) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message';
+        messageDiv.innerHTML = `<div class="bot-message">${text}</div>`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+      
+      // ユーザーメッセージの追加
+      function addUserMessage(text) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message user-message-container';
+        messageDiv.innerHTML = `<div class="user-message">${text}</div>`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    });
+  </script>
+</body>
+</html> 
