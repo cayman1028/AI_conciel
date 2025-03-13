@@ -1,14 +1,10 @@
 'use client';
 
-import { getCompanyConfig } from '@/lib/companyConfig';
-import { getResponseTemplate } from '@/lib/companyResponses';
-import { applyCompanyTheme } from '@/lib/companyTheme';
 import {
-    generateContextPrompt,
-    recordAmbiguousExpression,
-    recordUserQuestion,
-    saveConversationTopics,
-    updateTopic
+  generateContextPrompt,
+  recordUserQuestion,
+  saveConversationTopics,
+  updateTopic
 } from '@/lib/userContext';
 import styles from '@/styles/ChatWidget.module.css';
 import { useEffect, useRef, useState } from 'react';
@@ -18,60 +14,26 @@ interface Message {
   isUser: boolean;
 }
 
-interface ChatWidgetProps {
-  companyId?: string;
-}
-
 // ローカルストレージのキー
 const STORAGE_KEY_MESSAGES = 'chatbot_messages';
 const STORAGE_KEY_HISTORY = 'chatbot_history';
 
 // 時間帯に応じた挨拶を取得する関数
-const getTimeBasedGreeting = async (companyId: string = 'default'): Promise<string> => {
+const getTimeBasedGreeting = (): string => {
   const hour = new Date().getHours();
   
-  let greetingKey = '';
   if (hour >= 5 && hour < 12) {
-    greetingKey = 'morning';
+    return 'おはようございます！AIコンシェルへようこそ。今日も素晴らしい一日になりますように。何かお手伝いできることはありますか？';
   } else if (hour >= 12 && hour < 17) {
-    greetingKey = 'afternoon';
+    return 'こんにちは！AIコンシェルへようこそ。どのようにお手伝いできますか？';
   } else if (hour >= 17 && hour < 22) {
-    greetingKey = 'evening';
+    return 'こんばんは！AIコンシェルへようこそ。今日一日お疲れ様でした。何かお手伝いできることはありますか？';
   } else {
-    greetingKey = 'night';
-  }
-  
-  try {
-    // 法人設定から挨拶を取得
-    const config = await getCompanyConfig(companyId);
-    if (config.greeting && config.greeting[greetingKey]) {
-      return config.greeting[greetingKey];
-    }
-    
-    // 法人応答テンプレートから挨拶を取得
-    return await getResponseTemplate(
-      companyId,
-      'greeting',
-      'welcome',
-      'AIコンシェルへようこそ。どのようにお手伝いできますか？'
-    );
-  } catch (error) {
-    console.error('挨拶の取得エラー:', error);
-    
-    // フォールバック挨拶
-    if (greetingKey === 'morning') {
-      return 'おはようございます！AIコンシェルへようこそ。今日も素晴らしい一日になりますように。何かお手伝いできることはありますか？';
-    } else if (greetingKey === 'afternoon') {
-      return 'こんにちは！AIコンシェルへようこそ。どのようにお手伝いできますか？';
-    } else if (greetingKey === 'evening') {
-      return 'こんばんは！AIコンシェルへようこそ。今日一日お疲れ様でした。何かお手伝いできることはありますか？';
-    } else {
-      return 'お疲れ様です。AIコンシェルへようこそ。夜遅くまでご利用いただきありがとうございます。どのようにお手伝いできますか？';
-    }
+    return 'お疲れ様です。AIコンシェルへようこそ。夜遅くまでご利用いただきありがとうございます。どのようにお手伝いできますか？';
   }
 };
 
-export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
+export default function ChatWidget() {
   // 状態の初期化
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -79,29 +41,9 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [userContextPrompt, setUserContextPrompt] = useState('');
-  const [companyConfig, setCompanyConfig] = useState<any>(null);
-  
-  // 法人設定の読み込み
-  useEffect(() => {
-    const loadCompanyConfig = async () => {
-      try {
-        const config = await getCompanyConfig(companyId);
-        setCompanyConfig(config);
-        
-        // テーマの適用
-        if (typeof document !== 'undefined') {
-          applyCompanyTheme(companyId);
-        }
-      } catch (error) {
-        console.error('法人設定の読み込みエラー:', error);
-      }
-    };
-    
-    loadCompanyConfig();
-  }, [companyId]);
   
   // メッセージの読み込み
-  const loadMessagesFromStorage = async (): Promise<Message[]> => {
+  const loadMessagesFromStorage = (): Message[] => {
     if (typeof window === 'undefined') return [];
     
     const storedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
@@ -110,17 +52,16 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
     }
     
     // 時間帯に応じたウェルカムメッセージ
-    const greeting = await getTimeBasedGreeting(companyId);
     return [
       {
-        text: greeting,
+        text: getTimeBasedGreeting(),
         isUser: false
       }
     ];
   };
   
   // 会話履歴の読み込み
-  const loadHistoryFromStorage = async () => {
+  const loadHistoryFromStorage = () => {
     if (typeof window === 'undefined') return [];
     
     const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
@@ -128,46 +69,34 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
       return JSON.parse(storedHistory);
     }
     
-    // 法人設定からシステムプロンプトを取得
-    const config = await getCompanyConfig(companyId);
-    const systemPrompt = config.systemPrompt || 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。';
-    
     // デフォルトの会話履歴
-    const greeting = await getTimeBasedGreeting(companyId);
+    const greeting = getTimeBasedGreeting();
     return [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。' },
       { role: 'assistant', content: greeting }
     ];
   };
   
   // 初期化
   useEffect(() => {
-    const initializeChat = async () => {
-      const storedMessages = await loadMessagesFromStorage();
-      const storedHistory = await loadHistoryFromStorage();
-      
-      // 保存されたメッセージがある場合はそれを表示
-      if (storedMessages.length > 0) {
-        setMessages(storedMessages);
-        setHistory(storedHistory);
-      } else {
-        // 初回表示時はウェルカムメッセージを表示
-        const greeting = await getTimeBasedGreeting(companyId);
-        setMessages([{ text: greeting, isUser: false }]);
-        
-        // 法人設定からシステムプロンプトを取得
-        const config = await getCompanyConfig(companyId);
-        const systemPrompt = config.systemPrompt || 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。';
-        
-        setHistory([
-          { role: 'system', content: systemPrompt },
-          { role: 'assistant', content: greeting }
-        ]);
-      }
-    };
+    const storedMessages = loadMessagesFromStorage();
+    const storedHistory = loadHistoryFromStorage();
     
-    initializeChat();
-  }, [companyId]);
+    // 保存されたメッセージがある場合はそれを表示
+    if (storedMessages.length > 0) {
+      setMessages(storedMessages);
+      setHistory(storedHistory);
+    } else {
+      // 初回表示時はウェルカムメッセージを表示
+      const greeting = getTimeBasedGreeting();
+      setMessages([{ text: greeting, isUser: false }]);
+      
+      setHistory([
+        { role: 'system', content: 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。' },
+        { role: 'assistant', content: greeting }
+      ]);
+    }
+  }, []);
   
   // メッセージの保存
   useEffect(() => {
@@ -252,8 +181,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newHistory,
-          userContext: contextPrompt,
-          companyId: companyId  // 法人IDをAPIに渡す
+          userContext: contextPrompt
         }),
       });
       
@@ -282,20 +210,6 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
         }
       }
       
-      // あいまい表現の保存
-      if (data.ambiguousExpression && data.ambiguousExpression.detected) {
-        // 現在のトピックを取得（存在する場合）
-        const currentTopic = data.topics && data.topics.length > 0 ? data.topics[0] : undefined;
-        
-        recordAmbiguousExpression(
-          data.ambiguousExpression.expression,
-          data.ambiguousExpression.interpretation,
-          data.ambiguousExpression.confidence,
-          data.ambiguousExpression.context_factors,
-          currentTopic
-        );
-      }
-      
       // 会話履歴の更新
       setHistory([
         ...newHistory,
@@ -308,134 +222,136 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
     } catch (error) {
       console.error('エラー:', error);
       
-      // 法人固有のエラーメッセージを取得
-      let errorMessage = 'すみません、エラーが発生しました。もう一度お試しください。';
-      try {
-        errorMessage = await getResponseTemplate(
-          companyId,
-          'errors',
-          'general',
-          errorMessage
-        );
-      } catch (e) {
-        console.error('エラーメッセージの取得に失敗:', e);
-      }
-      
       setIsLoading(false);
       setMessages([
         ...newMessages,
-        { text: errorMessage, isUser: false }
+        { text: 'すみません、エラーが発生しました。もう一度お試しください。', isUser: false }
       ]);
       
-      // エラーメッセージを履歴に追加
-      setHistory([
-        ...newHistory,
-        { role: 'assistant', content: errorMessage }
-      ]);
-      
-      // メッセージ追加後にスクロール
+      // エラーメッセージ表示後にスクロール
       setTimeout(scrollToBottom, 50);
     }
   };
   
-  // 入力フィールドのキーダウンイベント処理
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // キー入力処理
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
   };
   
-  // チャットウィジェットの展開/折りたたみ
-  const toggleExpand = () => {
-    setIsExpanded(!isExpanded);
+  // 履歴のクリア
+  const handleClearHistory = () => {
+    const greeting = getTimeBasedGreeting();
+    
+    // メッセージをクリア
+    setMessages([{ text: greeting, isUser: false }]);
+    
+    // ユーザーコンテキストをリセット
+    setUserContextPrompt('');
+    
+    // 履歴をリセット
+    setHistory([
+      { role: 'system', content: 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。時間帯に応じて適切な挨拶をしてください。' },
+      { role: 'assistant', content: greeting }
+    ]);
+    
+    // スクロールを最下部に
+    setTimeout(scrollToBottom, 50);
   };
   
-  // チャットをクリア
-  const clearChat = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY_MESSAGES);
-      localStorage.removeItem(STORAGE_KEY_HISTORY);
+  // チャットウィジェットの表示状態が変わったときのスクロール処理
+  useEffect(() => {
+    if (isExpanded) {
+      // 少し遅延させてからスクロール（UIの更新を待つ）
+      setTimeout(scrollToBottom, 300);
     }
-    
-    // 初期化
-    const initializeChat = async () => {
-      const greeting = await getTimeBasedGreeting(companyId);
-      setMessages([{ text: greeting, isUser: false }]);
-      
-      // 法人設定からシステムプロンプトを取得
-      const config = await getCompanyConfig(companyId);
-      const systemPrompt = config.systemPrompt || 'あなたは企業のカスタマーサポートAIアシスタントです。丁寧で簡潔な応答を心がけてください。';
-      
-      setHistory([
-        { role: 'system', content: systemPrompt },
-        { role: 'assistant', content: greeting }
-      ]);
-    };
-    
-    initializeChat();
-  };
+  }, [isExpanded]);
   
   return (
-    <div className={`${styles.chatWidget} ${isExpanded ? styles.expanded : ''}`}>
-      <div className={styles.chatHeader} onClick={toggleExpand}>
-        <h3>{companyConfig?.name || 'AIコンシェル'}</h3>
-        <button className={styles.expandButton}>
-          {isExpanded ? '▼' : '▲'}
+    <div className={styles.chatWidget}>
+      {!isExpanded ? (
+        <button 
+          className={styles.chatButton}
+          onClick={() => setIsExpanded(true)}
+          aria-label="サポート"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            <line x1="8" y1="8" x2="16" y2="8" strokeWidth="1.5"></line>
+            <line x1="8" y1="12" x2="16" y2="12" strokeWidth="1.5"></line>
+          </svg>
         </button>
-      </div>
-      
-      {isExpanded && (
-        <>
-          <div className={styles.chatContainer} ref={chatContainerRef}>
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`${styles.message} ${
-                  message.isUser ? styles.userMessage : styles.assistantMessage
-                }`}
+      ) : (
+        <div className={styles.chatContainer}>
+          <div className={styles.chatHeader}>
+            <div className={styles.chatTitle}>
+              AIコンシェル
+            </div>
+            <div className={styles.chatControls}>
+              <button 
+                onClick={handleClearHistory}
+                className={styles.clearButton}
+                aria-label="履歴をクリア"
               >
-                <div className={styles.messageContent}>{message.text}</div>
-              </div>
-            ))}
-            
-            {isLoading && (
-              <div className={`${styles.message} ${styles.assistantMessage}`}>
-                <div className={styles.typingIndicator}>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            )}
-            
-            <div ref={messagesEndRef} />
+                履歴をクリア
+              </button>
+              <button 
+                onClick={() => setIsExpanded(false)}
+                className={styles.closeButton}
+                aria-label="閉じる"
+              >
+                ×
+              </button>
+            </div>
           </div>
           
-          <div className={styles.inputContainer}>
+          <div className={styles.chatMessages} ref={chatContainerRef}>
+            <div className={styles.messagesContainer}>
+              {messages.map((message, index) => (
+                <div key={index} className={styles.messageWrapper}>
+                  <div 
+                    className={`${styles.message} ${message.isUser ? styles.userMessage : styles.botMessage}`}
+                  >
+                    {message.text}
+                  </div>
+                </div>
+              ))}
+              
+              {/* ローディング表示 */}
+              {isLoading && (
+                <div className={styles.typingIndicator}>
+                  <span className={styles.dot}></span>
+                  <span className={styles.dot}></span>
+                  <span className={styles.dot}></span>
+                </div>
+              )}
+              
+              {/* スクロール位置の参照ポイント */}
+              <div ref={messagesEndRef} className={styles.messagesEnd} />
+            </div>
+          </div>
+          
+          <div className={styles.chatInput}>
             <textarea
-              className={styles.inputField}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="メッセージを入力..."
               rows={1}
+              className={styles.inputField}
             />
-            <button
-              className={styles.sendButton}
+            <button 
               onClick={handleSendMessage}
+              className={styles.sendButton}
               disabled={!inputValue.trim() || isLoading}
+              aria-label="送信"
             >
               送信
             </button>
           </div>
-          
-          <div className={styles.chatFooter}>
-            <button className={styles.clearButton} onClick={clearChat}>
-              会話をクリア
-            </button>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
