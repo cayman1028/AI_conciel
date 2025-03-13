@@ -1,10 +1,10 @@
 'use client';
 
 import {
-  generateContextPrompt,
-  recordUserQuestion,
-  saveConversationTopics,
-  updateTopic
+    generateContextPrompt,
+    recordUserQuestion,
+    saveConversationTopics,
+    updateTopic
 } from '@/lib/userContext';
 import styles from '@/styles/ChatWidget.module.css';
 import { useEffect, useRef, useState } from 'react';
@@ -33,7 +33,11 @@ const getTimeBasedGreeting = (): string => {
   }
 };
 
-export default function ChatWidget() {
+interface ChatWidgetProps {
+  companyId?: string;
+}
+
+export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   // 状態の初期化
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -181,7 +185,8 @@ export default function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newHistory,
-          userContext: contextPrompt
+          userContext: contextPrompt,
+          companyId
         }),
       });
       

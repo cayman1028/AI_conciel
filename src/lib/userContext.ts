@@ -283,7 +283,7 @@ export const generateContextPrompt = (): string => {
   }
   
   // あいまい表現の解釈履歴
-  if (context.ambiguousExpressions.length > 0) {
+  if (context.ambiguousExpressions && context.ambiguousExpressions.length > 0) {
     contextPrompt += '\n【あいまい表現の解釈履歴】\n';
     context.ambiguousExpressions.slice(0, 5).forEach(item => {
       let expressionInfo = `- 表現: "${item.expression}" → 解釈: "${item.interpretation}"`;
@@ -305,14 +305,14 @@ export const generateContextPrompt = (): string => {
   
   contextPrompt += '\n重要な指示：\n';
   contextPrompt += '1. この情報を参考にして、ユーザーとの会話の文脈を維持してください。\n';
-  contextPrompt += '2. 「さっきの話」「前回の質問」などの表現に適切に対応してください。過去の会話内容を参照できます。\n';
+  contextPrompt += '2. "さっきの話" "前回の質問"などの表現に適切に対応してください。過去の会話内容を参照できます。\n';
   contextPrompt += '3. ユーザーの好みや過去の質問を覚えていることを自然に示してください。\n';
-  contextPrompt += '4. 「会話の履歴は保存されていない」などと言わないでください。会話履歴は保存されており、過去の会話に戻ることができます。\n';
+  contextPrompt += '4. "会話の履歴は保存されていない"などと言わないでください。会話履歴は保存されており、過去の会話に戻ることができます。\n';
   contextPrompt += '5. ユーザーが過去の話題に戻りたい場合は、上記の情報を使って適切に対応してください。\n';
-  contextPrompt += '6. 日本語特有のあいまいな表現や婉曲表現を理解し、適切に解釈してください。「ちょっと」「もしよかったら」「～かもしれません」などの表現の真意を汲み取ってください。\n';
-  contextPrompt += '7. 遠回しな表現や断りの表現（「難しいかもしれません」「検討します」など）の真意を理解し、適切に応答してください。\n';
+  contextPrompt += '6. 日本語特有のあいまいな表現や婉曲表現を理解し、適切に解釈してください。"ちょっと" "もしよかったら" "～かもしれません"などの表現の真意を汲み取ってください。\n';
+  contextPrompt += '7. 遠回しな表現や断りの表現（"難しいかもしれません" "検討します"など）の真意を理解し、適切に応答してください。\n';
   contextPrompt += '8. 過去に解釈したあいまい表現の履歴を参考にして、一貫性のある応答をしてください。特に同じトピックや状況での解釈を優先してください。\n';
-  contextPrompt += '9. 文脈や状況に応じて、同じ表現でも異なる解釈が必要な場合があることを理解してください。例えば、ビジネス文脈での「検討します」と友人との会話での「検討します」は異なる意味を持つ可能性があります。\n';
+  contextPrompt += '9. 文脈や状況に応じて、同じ表現でも異なる解釈が必要な場合があることを理解してください。例えば、ビジネス文脈での"検討します"と友人との会話での"検討します"は異なる意味を持つ可能性があります。\n';
   
   return contextPrompt;
 }; 
