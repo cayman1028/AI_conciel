@@ -296,6 +296,42 @@
 }
 
 /* レスポンシブデザイン */
+@media (max-width: 768px) {
+    .chatContainer {
+        width: 90%;
+        max-width: 400px;
+        height: 80vh;
+    }
+    
+    .chatHeader {
+        padding: 12px;
+    }
+    
+    .chatTitle {
+        font-size: 15px;
+    }
+    
+    .clearButton, .closeButton {
+        font-size: 13px;
+        padding: 3px 6px;
+    }
+    
+    .message {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+    
+    .inputField {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    .sendButton {
+        padding: 0 12px;
+        font-size: 13px;
+    }
+}
+
 @media (max-width: 480px) {
     .chatContainer {
         width: 100%;
@@ -304,11 +340,50 @@
         bottom: 0;
         right: 0;
         border-radius: 0;
+        max-width: none;
     }
     
     .chatButton {
         width: 48px;
         height: 48px;
+    }
+    
+    .chatHeader {
+        padding: 10px;
+    }
+    
+    .chatMessages {
+        padding: 10px;
+    }
+    
+    .chatInput {
+        padding: 10px;
+    }
+    
+    .message {
+        max-width: 85%;
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+    
+    .inputField {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+    
+    .sendButton {
+        padding: 0 10px;
+        font-size: 12px;
+    }
+    
+    .chatButton::before {
+        left: -80px;
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+    
+    .chatButton::after {
+        left: -8px;
     }
 }
 

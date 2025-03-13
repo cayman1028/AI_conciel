@@ -16,6 +16,43 @@ const TOPIC_EXTRACTION_PROMPT = `
 会話:
 `;
 
+// あいまい表現検出のためのプロンプト
+const AMBIGUOUS_EXPRESSION_PROMPT = `
+あなたは日本語の婉曲表現やあいまい表現を検出し解釈するAIです。
+以下のユーザーの発言から、日本語特有のあいまい表現、婉曲表現、遠回しな表現を検出し、その真意を解釈してください。
+会話の文脈や前後の発言、トピックを考慮して解釈してください。
+
+検出すべき表現の例:
+- 「ちょっと」「少し」（控えめな表現で実際は「とても」の意味かもしれない）
+- 「もしよかったら」「できれば」（実際には強い要望かもしれない）
+- 「～かもしれません」「～と思います」（確信があるが控えめに表現している）
+- 「検討します」「難しいかもしれません」（断りの婉曲表現）
+- 「そうですね」（同意ではなく考え中や曖昧な返事）
+- 「すみません」（謝罪ではなく感謝や注意喚起の意味）
+- 「よろしければ」「お手すきの際に」（実際には早急な対応を期待している）
+- 「気にしないでください」（実際には気にしている）
+- 「大丈夫です」（実際には問題がある可能性）
+
+文脈に応じた解釈の例:
+- ビジネス文脈での「検討します」は多くの場合「実現は難しい」という意味
+- 顧客からの「ちょっと高いですね」は「値下げしてほしい」という要望かもしれない
+- 上司への「可能であれば」は「強く希望する」という意味かもしれない
+
+JSON形式で以下の情報を返してください:
+{
+  "detected": true/false,  // あいまい表現が検出されたかどうか
+  "expression": "検出された表現",  // 検出された表現（なければ空文字）
+  "interpretation": "解釈された真意",  // 表現の解釈（なければ空文字）
+  "confidence": 0-1,  // 解釈の確信度（0.0〜1.0）
+  "context_factors": ["考慮した文脈要素1", "考慮した文脈要素2"]  // 解釈に影響を与えた文脈要素
+}
+
+会話の文脈:
+{{CONVERSATION_CONTEXT}}
+
+ユーザーの発言:
+`;
+
 export async function POST(req: NextRequest) {
   try {
     // レート制限のチェック
@@ -85,6 +122,69 @@ export async function POST(req: NextRequest) {
       apiKey: process.env.OPENAI_API_KEY,
     });
     
+    // 最新のユーザーメッセージを取得
+    const latestUserMessage = messages
+      .filter(msg => msg.role === 'user')
+      .pop();
+    
+    // あいまい表現の検出と解釈
+    let ambiguousExpression = {
+      detected: false,
+      expression: '',
+      interpretation: '',
+      confidence: 0,
+      context_factors: []
+    };
+    
+    if (latestUserMessage) {
+      try {
+        // 会話の文脈を構築（直近の最大5つのメッセージ）
+        const conversationContext = messages
+          .filter(msg => msg.role !== 'system')
+          .slice(-5)
+          .map(msg => `${msg.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${msg.content}`)
+          .join('\n');
+        
+        // プロンプトに文脈情報を埋め込む
+        const contextualPrompt = AMBIGUOUS_EXPRESSION_PROMPT.replace(
+          '{{CONVERSATION_CONTEXT}}',
+          conversationContext
+        );
+        
+        const ambiguousResponse = await openai.chat.completions.create({
+          model: 'gpt-4o',  // より高度な理解のためにGPT-4を使用
+          messages: [
+            { role: 'system', content: contextualPrompt },
+            { role: 'user', content: latestUserMessage.content }
+          ],
+          temperature: 0.3,
+          max_tokens: 250,
+          response_format: { type: 'json_object' }
+        });
+        
+        const ambiguousContent = ambiguousResponse.choices[0].message.content || '';
+        try {
+          const parsedResult = JSON.parse(ambiguousContent);
+          ambiguousExpression = {
+            detected: parsedResult.detected || false,
+            expression: parsedResult.expression || '',
+            interpretation: parsedResult.interpretation || '',
+            confidence: parsedResult.confidence || 0,
+            context_factors: parsedResult.context_factors || []
+          };
+          
+          // あいまい表現が検出された場合、システムプロンプトに追加情報を付与
+          if (ambiguousExpression.detected && ambiguousExpression.confidence >= 0.6 && systemMessageIndex >= 0) {
+            messages[systemMessageIndex].content += `\n\n【検出されたあいまい表現】\n「${ambiguousExpression.expression}」という表現が検出されました。これは「${ambiguousExpression.interpretation}」という意図である可能性があります（確信度: ${Math.round(ambiguousExpression.confidence * 100)}%）。\n考慮された文脈要素: ${ambiguousExpression.context_factors.join('、')}\nこの解釈を考慮して応答してください。`;
+          }
+        } catch (e) {
+          console.error('あいまい表現解析エラー:', e);
+        }
+      } catch (e) {
+        console.error('あいまい表現検出APIエラー:', e);
+      }
+    }
+    
     // OpenAI APIへのリクエスト
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -135,7 +235,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       message: response.choices[0].message,
       usage: response.usage,
-      topics: topics
+      topics: topics,
+      ambiguousExpression: ambiguousExpression
     });
     
   } catch (error: any) {

@@ -1,10 +1,11 @@
 'use client';
 
 import {
-  generateContextPrompt,
-  recordUserQuestion,
-  saveConversationTopics,
-  updateTopic
+    generateContextPrompt,
+    recordAmbiguousExpression,
+    recordUserQuestion,
+    saveConversationTopics,
+    updateTopic
 } from '@/lib/userContext';
 import styles from '@/styles/ChatWidget.module.css';
 import { useEffect, useRef, useState } from 'react';
@@ -208,6 +209,26 @@ export default function ChatWidget() {
         if (data.topics[0]) {
           updateTopic(data.topics[0], cleanedMessage.substring(0, 100) + '...');
         }
+      }
+      
+      // あいまい表現の保存
+      if (data.ambiguousExpression && data.ambiguousExpression.detected) {
+        // 現在のトピックを取得（存在する場合）
+        const currentTopic = data.topics && data.topics.length > 0 ? data.topics[0] : undefined;
+        
+        recordAmbiguousExpression(
+          data.ambiguousExpression.expression,
+          data.ambiguousExpression.interpretation,
+          data.ambiguousExpression.confidence,
+          data.ambiguousExpression.context_factors,
+          currentTopic
+        );
+        
+        // デバッグ用（本番環境では削除）
+        console.log('あいまい表現を検出:', {
+          ...data.ambiguousExpression,
+          topic: currentTopic
+        });
       }
       
       // 会話履歴の更新
