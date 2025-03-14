@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 
 // OpenAIクライアントのシングルトンインスタンス
 let openaiClient: OpenAI | null = null;
+
 function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
     openaiClient = new OpenAI({
