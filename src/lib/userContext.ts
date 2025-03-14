@@ -1,22 +1,56 @@
 // ユーザーコンテキスト管理
 // 新しいUserContextServiceを使用するためのラッパー
 
+import { StorageService } from './services/storageService';
 import {
     AMBIGUOUS_EXPRESSIONS_KEY,
     AmbiguousExpression,
     CONVERSATION_TOPICS_KEY,
     defaultUserContext,
     getUserContextService,
-    resetUserContextService,
+    resetUserContextService as resetContextService,
+    setUserContextService as setContextService,
     USER_CONTEXT_KEY,
-    UserContext
+    UserContext,
+    UserContextService
 } from './services/userContextService';
 
 // 型定義をエクスポート
-export {
-    AMBIGUOUS_EXPRESSIONS_KEY, AmbiguousExpression, CONVERSATION_TOPICS_KEY, defaultUserContext,
-    USER_CONTEXT_KEY, UserContext
+export { defaultUserContext, USER_CONTEXT_KEY };
+export type {
+    AmbiguousExpression,
+    UserContext,
+    UserContextService
 };
+
+// 定数をエクスポート
+export const CONVERSATION_TOPICS_KEY_EXPORT = CONVERSATION_TOPICS_KEY;
+export const AMBIGUOUS_EXPRESSIONS_KEY_EXPORT = AMBIGUOUS_EXPRESSIONS_KEY;
+
+/**
+ * UserContextServiceを作成する関数
+ * 依存性注入パターンを使用して、テスト時にモックサービスを注入できるようにする
+ * @param storageService ストレージサービス（省略可）
+ * @returns UserContextServiceインスタンス
+ */
+export function createUserContextService(storageService?: StorageService): UserContextService {
+  return getUserContextService(storageService);
+}
+
+/**
+ * テスト用にUserContextServiceをリセットする関数
+ */
+export function resetUserContextService(): void {
+  resetContextService();
+}
+
+/**
+ * テスト用にカスタムUserContextServiceを設定する関数
+ * @param service 設定するUserContextService
+ */
+export function setUserContextService(service: UserContextService): void {
+  setContextService(service);
+}
 
 // ユーザーコンテキストの取得（キャッシュ対応）
 export const getUserContext = (): UserContext => {
@@ -85,5 +119,5 @@ export const resetCache = (): void => {
 
 // サービス全体のリセット（テスト用）
 export const resetAll = (): void => {
-  resetUserContextService();
+  resetContextService();
 }; 

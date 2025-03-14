@@ -46,148 +46,206 @@ export const defaultUserContext: UserContext = {
 };
 
 /**
- * ユーザーコンテキストサービスクラス
+ * ユーザーコンテキストサービスのインターフェース
  */
-export class UserContextService {
+export interface UserContextService {
+  /**
+   * ユーザーコンテキストを取得
+   * @returns ユーザーコンテキスト
+   */
+  getUserContext(): UserContext;
+  
+  /**
+   * ユーザーコンテキストを保存
+   * @param context 保存するユーザーコンテキスト
+   */
+  saveUserContext(context: UserContext): void;
+  
+  /**
+   * 会話トピックを取得
+   * @returns 会話トピックの配列
+   */
+  getConversationTopics(): string[];
+  
+  /**
+   * 会話トピックを保存
+   * @param topics 保存する会話トピックの配列
+   */
+  saveConversationTopics(topics: string[]): void;
+  
+  /**
+   * ユーザーの質問を記録
+   * @param question ユーザーの質問
+   */
+  recordUserQuestion(question: string): void;
+  
+  /**
+   * トピックを更新
+   * @param topic トピック名
+   * @param details トピックの詳細
+   */
+  updateTopic(topic: string, details: string): void;
+  
+  /**
+   * ユーザーの好みを記録
+   * @param key 好みのキー
+   * @param value 好みの値
+   */
+  recordUserPreference(key: string, value: string | number | boolean): void;
+  
+  /**
+   * あいまい表現を記録
+   * @param expression あいまい表現
+   * @param interpretation 解釈
+   * @param confidence 確信度
+   * @param contextFactors 文脈要素
+   */
+  recordAmbiguousExpression(
+    expression: string,
+    interpretation: string,
+    confidence?: number,
+    contextFactors?: string[]
+  ): void;
+  
+  /**
+   * コンテキストプロンプトを生成
+   * @returns コンテキストプロンプト
+   */
+  generateContextPrompt(): string;
+  
+  /**
+   * ユーザーコンテキストをクリア
+   */
+  clearUserContext(): void;
+  
+  /**
+   * キャッシュをリセット
+   */
+  resetCache(): void;
+}
+
+/**
+ * ユーザーコンテキストサービスの実装クラス
+ */
+export class UserContextServiceImpl implements UserContextService {
+  // メモリキャッシュ
+  private userContextCache: UserContext | null = null;
+  private conversationTopicsCache: string[] | null = null;
+  private contextPromptCache: string | null = null;
+  
+  // 保存処理のスロットル用
+  private saveTimeout: NodeJS.Timeout | null = null;
+  private readonly SAVE_DELAY = 500; // 500ms
+  
+  // 依存関係
   private storageService: StorageService;
-  
-  // メモリキャッシュ（高速化のため）
-  private memoryCache: {
-    userContext: UserContext | null;
-    conversationTopics: string[] | null;
-    contextPrompt: string | null;
-    userContextTimestamp: number;
-    topicsTimestamp: number;
-    contextPromptTimestamp: number;
-    saveTimeout: NodeJS.Timeout | null;
-  };
-  
-  // キャッシュの有効期限（60秒）
-  private readonly CACHE_TTL = 60 * 1000;
   
   /**
    * コンストラクタ
    * @param storageService ストレージサービス
    */
-  constructor(storageService: StorageService) {
-    this.storageService = storageService;
-    this.memoryCache = {
-      userContext: null,
-      conversationTopics: null,
-      contextPrompt: null,
-      userContextTimestamp: 0,
-      topicsTimestamp: 0,
-      contextPromptTimestamp: 0,
-      saveTimeout: null
-    };
+  constructor(storageService?: StorageService) {
+    this.storageService = storageService || getStorageService();
   }
   
   /**
-   * ユーザーコンテキストの取得（キャッシュ対応）
+   * ユーザーコンテキストを取得
    * @returns ユーザーコンテキスト
    */
   getUserContext(): UserContext {
-    // キャッシュにあればそれを返す
-    if (this.memoryCache.userContext) {
-      return this.memoryCache.userContext;
+    // キャッシュがあればそれを返す
+    if (this.userContextCache) {
+      return this.userContextCache;
     }
     
+    // ストレージから取得
     const storedContext = this.storageService.getItem(USER_CONTEXT_KEY);
+    
     if (storedContext) {
       try {
+        // JSONをパース
         const parsedContext = JSON.parse(storedContext);
         // キャッシュに保存
-        this.memoryCache.userContext = parsedContext;
+        this.userContextCache = parsedContext;
         return parsedContext;
       } catch (e) {
-        console.error('ユーザーコンテキストの解析に失敗しました:', e);
-        // キャッシュにデフォルト値を保存
-        this.memoryCache.userContext = defaultUserContext;
-        return defaultUserContext;
+        console.error('ユーザーコンテキストのパースエラー:', e);
       }
     }
     
-    // キャッシュにデフォルト値を保存
-    this.memoryCache.userContext = defaultUserContext;
-    return defaultUserContext;
+    // デフォルト値を返す
+    this.userContextCache = { ...defaultUserContext };
+    return this.userContextCache;
   }
   
   /**
-   * ユーザーコンテキストの保存（スロットル処理）
-   * @param context ユーザーコンテキスト
+   * ユーザーコンテキストを保存
+   * @param context 保存するユーザーコンテキスト
    */
   saveUserContext(context: UserContext): void {
     // キャッシュを更新
-    this.memoryCache.userContext = context;
+    this.userContextCache = { ...context };
     
-    // コンテキストプロンプトのキャッシュをクリア（内容が変わったため）
-    this.memoryCache.contextPrompt = null;
-    
-    // 既存のタイムアウトをクリア
-    if (this.memoryCache.saveTimeout) {
-      clearTimeout(this.memoryCache.saveTimeout);
+    // スロットル処理（短時間に何度も保存しないようにする）
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
     }
     
-    // 非同期で保存（UIブロッキングを防止、頻繁な保存を防止）
-    this.memoryCache.saveTimeout = setTimeout(() => {
-      this.storageService.setItem(USER_CONTEXT_KEY, JSON.stringify(context));
-      this.memoryCache.saveTimeout = null;
-    }, 300);
+    this.saveTimeout = setTimeout(() => {
+      try {
+        // JSONに変換してストレージに保存
+        this.storageService.setItem(USER_CONTEXT_KEY, JSON.stringify(context));
+      } catch (e) {
+        console.error('ユーザーコンテキストの保存エラー:', e);
+      }
+      this.saveTimeout = null;
+    }, this.SAVE_DELAY);
   }
   
   /**
-   * 会話トピックの取得（キャッシュ対応）
+   * 会話トピックを取得
    * @returns 会話トピックの配列
    */
   getConversationTopics(): string[] {
-    // キャッシュにあればそれを返す
-    if (this.memoryCache.conversationTopics) {
-      return this.memoryCache.conversationTopics;
+    // キャッシュがあればそれを返す
+    if (this.conversationTopicsCache) {
+      return this.conversationTopicsCache;
     }
     
+    // ストレージから取得
     const storedTopics = this.storageService.getItem(CONVERSATION_TOPICS_KEY);
+    
     if (storedTopics) {
       try {
+        // JSONをパース
         const parsedTopics = JSON.parse(storedTopics);
         // キャッシュに保存
-        this.memoryCache.conversationTopics = parsedTopics;
+        this.conversationTopicsCache = parsedTopics;
         return parsedTopics;
       } catch (e) {
-        console.error('会話トピックの解析に失敗しました:', e);
-        // キャッシュに空配列を保存
-        this.memoryCache.conversationTopics = [];
-        return [];
+        console.error('会話トピックのパースエラー:', e);
       }
     }
     
-    // キャッシュに空配列を保存
-    this.memoryCache.conversationTopics = [];
-    return [];
+    // デフォルト値を返す
+    this.conversationTopicsCache = [];
+    return this.conversationTopicsCache;
   }
   
   /**
-   * 会話トピックの保存
-   * @param topics 会話トピックの配列
+   * 会話トピックを保存
+   * @param topics 保存する会話トピックの配列
    */
   saveConversationTopics(topics: string[]): void {
-    // キャッシュから取得または初期化
-    const currentTopics = this.memoryCache.conversationTopics || this.getConversationTopics();
-    
-    // 重複を排除して新しいトピックを追加
-    const newTopicsSet = new Set([...currentTopics]);
-    topics.forEach(topic => newTopicsSet.add(topic));
-    const newTopics = Array.from(newTopicsSet);
-    
     // キャッシュを更新
-    this.memoryCache.conversationTopics = newTopics;
+    this.conversationTopicsCache = [...topics];
     
-    // コンテキストプロンプトのキャッシュをクリア（内容が変わったため）
-    this.memoryCache.contextPrompt = null;
-    
-    // 非同期で保存（UIブロッキングを防止）
-    setTimeout(() => {
-      this.storageService.setItem(CONVERSATION_TOPICS_KEY, JSON.stringify(newTopics));
-    }, 0);
+    try {
+      // JSONに変換してストレージに保存
+      this.storageService.setItem(CONVERSATION_TOPICS_KEY, JSON.stringify(topics));
+    } catch (e) {
+      console.error('会話トピックの保存エラー:', e);
+    }
   }
   
   /**
@@ -195,33 +253,49 @@ export class UserContextService {
    * @param question ユーザーの質問
    */
   recordUserQuestion(question: string): void {
-    // キャッシュから直接取得（または初期化）
-    const context = this.memoryCache.userContext || this.getUserContext();
+    const context = this.getUserContext();
     
-    // 最新の質問を先頭に追加（最大10件まで保存）
-    context.recentQuestions = [
-      { text: question, timestamp: Date.now() },
+    // 新しい質問を追加
+    const newQuestion = {
+      text: question,
+      timestamp: Date.now()
+    };
+    
+    // 最大10件まで保持
+    const recentQuestions = [
+      newQuestion,
       ...context.recentQuestions.slice(0, 9)
     ];
     
-    this.saveUserContext(context);
+    // コンテキストを更新して保存
+    this.saveUserContext({
+      ...context,
+      recentQuestions
+    });
   }
   
   /**
-   * トピックの更新
+   * トピックを更新
    * @param topic トピック名
    * @param details トピックの詳細
    */
   updateTopic(topic: string, details: string): void {
-    // キャッシュから直接取得（または初期化）
-    const context = this.memoryCache.userContext || this.getUserContext();
+    const context = this.getUserContext();
     
-    context.topics[topic] = {
-      lastMentioned: Date.now(),
-      details
+    // トピックを更新
+    const updatedTopics = {
+      ...context.topics,
+      [topic]: {
+        lastMentioned: Date.now(),
+        details
+      }
     };
     
-    this.saveUserContext(context);
+    // コンテキストを更新して保存
+    this.saveUserContext({
+      ...context,
+      topics: updatedTopics
+    });
   }
   
   /**
@@ -230,12 +304,19 @@ export class UserContextService {
    * @param value 好みの値
    */
   recordUserPreference(key: string, value: string | number | boolean): void {
-    // キャッシュから直接取得（または初期化）
-    const context = this.memoryCache.userContext || this.getUserContext();
+    const context = this.getUserContext();
     
-    context.preferences[key] = value;
+    // 好みを更新
+    const updatedPreferences = {
+      ...context.preferences,
+      [key]: value
+    };
     
-    this.saveUserContext(context);
+    // コンテキストを更新して保存
+    this.saveUserContext({
+      ...context,
+      preferences: updatedPreferences
+    });
   }
   
   /**
@@ -243,7 +324,7 @@ export class UserContextService {
    * @param expression あいまい表現
    * @param interpretation 解釈
    * @param confidence 確信度
-   * @param contextFactors コンテキスト要因
+   * @param contextFactors 文脈要素
    */
   recordAmbiguousExpression(
     expression: string,
@@ -251,176 +332,145 @@ export class UserContextService {
     confidence: number = 0.8,
     contextFactors: string[] = []
   ): void {
-    // キャッシュから直接取得（または初期化）
-    const context = this.memoryCache.userContext || this.getUserContext();
+    const context = this.getUserContext();
     
     // 新しいあいまい表現を追加
-    context.ambiguousExpressions.push({
+    const newExpression: AmbiguousExpression = {
       expression,
       interpretation,
       timestamp: Date.now(),
       confidence,
       contextFactors
+    };
+    
+    // 最大20件まで保持
+    const ambiguousExpressions = [
+      newExpression,
+      ...context.ambiguousExpressions.slice(0, 19)
+    ];
+    
+    // コンテキストを更新して保存
+    this.saveUserContext({
+      ...context,
+      ambiguousExpressions
     });
-    
-    // 最大50件に制限
-    if (context.ambiguousExpressions.length > 50) {
-      context.ambiguousExpressions = context.ambiguousExpressions.slice(-50);
-    }
-    
-    this.saveUserContext(context);
   }
   
   /**
-   * コンテキストプロンプトの生成
+   * コンテキストプロンプトを生成
    * @returns コンテキストプロンプト
    */
   generateContextPrompt(): string {
-    // キャッシュにあればそれを返す
-    if (
-      this.memoryCache.contextPrompt &&
-      Date.now() - this.memoryCache.contextPromptTimestamp < this.CACHE_TTL
-    ) {
-      return this.memoryCache.contextPrompt;
+    // キャッシュがあればそれを返す
+    if (this.contextPromptCache) {
+      return this.contextPromptCache;
     }
     
-    // ユーザーコンテキストを取得
     const context = this.getUserContext();
-    
-    // 会話トピックを取得
     const topics = this.getConversationTopics();
     
     // プロンプトの構築
-    let prompt = '【ユーザーコンテキスト】\n';
+    let prompt = '【ユーザーコンテキスト情報】\n';
     
-    // 好みの情報を追加
+    // 好みの情報
     if (Object.keys(context.preferences).length > 0) {
       prompt += '■ユーザーの好み:\n';
-      Object.entries(context.preferences).forEach(([key, value]) => {
-        prompt += `- ${key}: ${value}\n`;
-      });
+      for (const [key, value] of Object.entries(context.preferences)) {
+        prompt += `・${key}: ${value}\n`;
+      }
       prompt += '\n';
     }
     
-    // 最近の質問を追加
+    // 最近の質問
     if (context.recentQuestions.length > 0) {
       prompt += '■最近の質問:\n';
       context.recentQuestions.slice(0, 5).forEach(q => {
-        prompt += `- ${q.text}\n`;
+        prompt += `・${q.text}\n`;
       });
       prompt += '\n';
     }
     
-    // トピックを追加
-    if (Object.keys(context.topics).length > 0) {
-      prompt += '■関連トピック:\n';
-      Object.entries(context.topics)
-        .sort((a, b) => b[1].lastMentioned - a[1].lastMentioned)
-        .slice(0, 5)
-        .forEach(([topic, data]) => {
-          prompt += `- ${topic}: ${data.details}\n`;
-        });
-      prompt += '\n';
-    }
-    
-    // 会話トピックを追加
+    // 会話トピック
     if (topics.length > 0) {
-      prompt += '■会話トピック:\n';
-      topics.slice(0, 10).forEach(topic => {
-        prompt += `- ${topic}\n`;
+      prompt += '■会話のトピック:\n';
+      prompt += topics.join('、') + '\n\n';
+    }
+    
+    // トピックの詳細情報
+    const recentTopics = Object.entries(context.topics)
+      .sort((a, b) => b[1].lastMentioned - a[1].lastMentioned)
+      .slice(0, 5);
+    
+    if (recentTopics.length > 0) {
+      prompt += '■トピックの詳細:\n';
+      recentTopics.forEach(([topic, info]) => {
+        prompt += `・${topic}: ${info.details}\n`;
       });
       prompt += '\n';
     }
     
-    // あいまい表現を追加
+    // あいまい表現
     if (context.ambiguousExpressions.length > 0) {
-      prompt += '■あいまい表現の解釈:\n';
-      context.ambiguousExpressions
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 5)
-        .forEach(exp => {
-          prompt += `- "${exp.expression}" → ${exp.interpretation}\n`;
-        });
+      prompt += '■過去のあいまい表現:\n';
+      context.ambiguousExpressions.slice(0, 3).forEach(exp => {
+        prompt += `・「${exp.expression}」→ ${exp.interpretation} (確信度: ${Math.round(exp.confidence! * 100)}%)\n`;
+      });
       prompt += '\n';
     }
     
     // キャッシュに保存
-    this.memoryCache.contextPrompt = prompt;
-    this.memoryCache.contextPromptTimestamp = Date.now();
-    
+    this.contextPromptCache = prompt;
     return prompt;
   }
   
   /**
-   * ユーザーコンテキストのクリア
+   * ユーザーコンテキストをクリア
    */
   clearUserContext(): void {
-    // ストレージからクリア
-    this.storageService.removeItem(USER_CONTEXT_KEY);
-    this.storageService.removeItem(CONVERSATION_TOPICS_KEY);
-    this.storageService.removeItem(AMBIGUOUS_EXPRESSIONS_KEY);
-    
     // キャッシュをクリア
-    this.memoryCache.userContext = null;
-    this.memoryCache.conversationTopics = null;
-    this.memoryCache.contextPrompt = null;
-    this.memoryCache.userContextTimestamp = 0;
-    this.memoryCache.topicsTimestamp = 0;
-    this.memoryCache.contextPromptTimestamp = 0;
+    this.userContextCache = { ...defaultUserContext };
+    this.contextPromptCache = null;
     
-    // タイムアウトをクリア
-    if (this.memoryCache.saveTimeout) {
-      clearTimeout(this.memoryCache.saveTimeout);
-      this.memoryCache.saveTimeout = null;
-    }
+    // ストレージから削除
+    this.storageService.removeItem(USER_CONTEXT_KEY);
   }
   
   /**
-   * キャッシュのリセット（テスト用）
+   * キャッシュをリセット
    */
   resetCache(): void {
-    this.memoryCache.userContext = null;
-    this.memoryCache.conversationTopics = null;
-    this.memoryCache.contextPrompt = null;
-    this.memoryCache.userContextTimestamp = 0;
-    this.memoryCache.topicsTimestamp = 0;
-    this.memoryCache.contextPromptTimestamp = 0;
-    
-    if (this.memoryCache.saveTimeout) {
-      clearTimeout(this.memoryCache.saveTimeout);
-      this.memoryCache.saveTimeout = null;
-    }
+    this.userContextCache = null;
+    this.conversationTopicsCache = null;
+    this.contextPromptCache = null;
   }
 }
 
 /**
- * ユーザーコンテキストサービスの取得
- * @param storageService カスタムストレージサービス（省略可）
+ * デフォルトのユーザーコンテキストサービスを取得
+ * @param storageService ストレージサービス（省略可）
  * @returns ユーザーコンテキストサービス
  */
 export function getUserContextService(storageService?: StorageService): UserContextService {
   if (!defaultUserContextService) {
-    defaultUserContextService = new UserContextService(
-      storageService || getStorageService()
-    );
+    defaultUserContextService = new UserContextServiceImpl(storageService);
   }
   return defaultUserContextService;
 }
 
 /**
- * ユーザーコンテキストサービスの設定（テスト用）
- * @param service ユーザーコンテキストサービス
- */
-export function setUserContextService(service: UserContextService): void {
-  defaultUserContextService = service;
-}
-
-/**
- * ユーザーコンテキストサービスのリセット（テスト用）
+ * テスト用にユーザーコンテキストサービスをリセット
  */
 export function resetUserContextService(): void {
   if (defaultUserContextService) {
     defaultUserContextService.resetCache();
   }
   defaultUserContextService = null;
+}
+
+/**
+ * テスト用にカスタムユーザーコンテキストサービスを設定
+ * @param service 設定するユーザーコンテキストサービス
+ */
+export function setUserContextService(service: UserContextService): void {
+  defaultUserContextService = service;
 } 
