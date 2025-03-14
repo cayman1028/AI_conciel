@@ -121,6 +121,26 @@ jest.mock('../../lib/userContext', () => {
     window.localStorage.removeItem('conversationTopics');
   };
   
+  // recordUserQuestionの実装を追加
+  const recordUserQuestion = (question: string): void => {
+    const context = getUserContext();
+    const timestamp = Date.now();
+    
+    // 新しい質問を追加
+    context.recentQuestions.push({
+      text: question,
+      timestamp
+    });
+    
+    // 最大10件に制限
+    if (context.recentQuestions.length > 10) {
+      context.recentQuestions = context.recentQuestions.slice(-10);
+    }
+    
+    // 更新したコンテキストを保存
+    saveUserContext(context);
+  };
+  
   // テスト用にメモリキャッシュをリセットする関数
   const resetCache = (): void => {
     memoryCache = {
@@ -141,6 +161,7 @@ jest.mock('../../lib/userContext', () => {
     getConversationTopics,
     saveConversationTopics,
     clearUserContext,
+    recordUserQuestion,
     __resetCache: resetCache,
   };
 });

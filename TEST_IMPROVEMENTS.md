@@ -91,8 +91,37 @@
 
 ## 進捗状況
 
-### 2023年XX月XX日
+### 2023年XX月XX日（初期状態）
 - BroadcastChannelのモックを追加
 - userContextのテストを改善（メモリキャッシュのリセット機能）
 - ChatWidgetのテストを改善（themeStylesのモック）
-- chat.test.tsのNextRequest/NextResponseモックを改善 
+- chat.test.tsのNextRequest/NextResponseモックを改善
+
+### 2023年XX月XX日（フェーズ1の進捗）
+- userContext.test.tsのメモリキャッシュ問題を完全に解決
+  - recordUserQuestion関数のテストを修正
+  - テスト間の状態漏洩を防止するリセット機能を追加
+- jest.setup.jsにNextRequestとNextResponseのモックを追加
+- APIルートのテストを追加（src/__tests__/api/chatRoute.test.ts）
+  - 通常のレスポンスとストリーミングレスポンスのテスト
+  - エラーハンドリングのテスト
+- テストヘルパー関数を作成（src/__tests__/helpers/testUtils.ts）
+  - モックユーザーコンテキスト作成関数
+  - モックメッセージ作成関数
+  - localStorageモック関数
+  - fetchモック関数
+  - ストリームレスポンスモック関数
+
+## 次のステップ
+
+1. **ChatWidgetのテスト改善**
+   - スキップされているテストを修正
+   - UIイベントのテストを追加
+
+2. **ストレージサービスの抽象化**
+   - localStorage依存を分離するインターフェースの設計
+   - userContextモジュールの改善
+
+3. **APIクライアントの抽象化**
+   - fetch依存を分離するインターフェースの設計
+   - OpenAI API呼び出しの抽象化 

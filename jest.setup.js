@@ -156,6 +156,84 @@ if (typeof global.BroadcastChannel === 'undefined') {
   };
 }
 
+// Next.js App Router APIルート用のモック
+// NextRequestのモック
+class NextRequestMock {
+  constructor(input, init = {}) {
+    this.url = typeof input === 'string' ? input : input.url;
+    this.method = init.method || 'GET';
+    this.headers = new Headers(init.headers);
+    this.body = init.body || null;
+    this.nextUrl = new URL(this.url);
+    this.cookies = {
+      get: jest.fn().mockReturnValue(null),
+      getAll: jest.fn().mockReturnValue([]),
+      set: jest.fn(),
+      delete: jest.fn(),
+      has: jest.fn().mockReturnValue(false),
+    };
+  }
+
+  json() {
+    return Promise.resolve(JSON.parse(this.body));
+  }
+
+  text() {
+    return Promise.resolve(this.body);
+  }
+
+  clone() {
+    return new NextRequestMock(this.url, {
+      method: this.method,
+      headers: this.headers,
+      body: this.body,
+    });
+  }
+}
+
+// NextResponseのモック
+class NextResponseMock {
+  constructor(body, options = {}) {
+    this.body = body;
+    this.status = options.status || 200;
+    this.statusText = options.statusText || '';
+    this.headers = new Headers(options.headers);
+    this.cookies = {
+      get: jest.fn().mockReturnValue(null),
+      getAll: jest.fn().mockReturnValue([]),
+      set: jest.fn(),
+      delete: jest.fn(),
+      has: jest.fn().mockReturnValue(false),
+    };
+  }
+
+  static json(data, options = {}) {
+    const body = JSON.stringify(data);
+    return new NextResponseMock(body, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
+  static redirect(url, options = {}) {
+    return new NextResponseMock(null, {
+      ...options,
+      status: 302,
+      headers: {
+        ...options.headers,
+        Location: url,
+      },
+    });
+  }
+}
+
+// グローバルにNextRequestとNextResponseを設定
+global.NextRequest = NextRequestMock;
+global.NextResponse = NextResponseMock;
+
 // localStorageのモック
 class LocalStorageMock {
   constructor() {
