@@ -4,12 +4,58 @@
  */
 
 import { jest } from '@jest/globals';
-import { NextRequest } from 'next/server';
-import { POST } from '../../app/api/chat/route';
+
+// APIルートをモックする前に、NextRequestとNextResponseをモック
+const originalNextRequest = global.NextRequest;
+const originalNextResponse = global.NextResponse;
+
+// NextRequestのモックを改善
+class MockNextRequest extends originalNextRequest {
+  constructor(input, init = {}) {
+    super(input, init);
+    
+    // jsonメソッドを追加
+    this.json = jest.fn().mockImplementation(() => {
+      if (this.body) {
+        return Promise.resolve(JSON.parse(this.body));
+      }
+      return Promise.resolve({});
+    });
+  }
+}
+
+// NextResponseのモックを改善
+class MockNextResponse extends originalNextResponse {
+  constructor(body, init = {}) {
+    super(body, init);
+  }
+  
+  static json(data, init = {}) {
+    const jsonString = JSON.stringify(data);
+    const response = new MockNextResponse(jsonString, init);
+    response.headers.set('Content-Type', 'application/json');
+    return response;
+  }
+}
+
+// グローバルオブジェクトを置き換え
+global.NextRequest = MockNextRequest;
+global.NextResponse = MockNextResponse;
+
+// APIルートをインポート（モック設定後に行う）
+const { POST } = jest.requireActual('../../app/api/chat/route');
 
 // OpenAIのモック
 jest.mock('openai', () => {
   return class OpenAI {
+    constructor(config) {
+      // dangerouslyAllowBrowserオプションを追加
+      this.config = {
+        ...config,
+        dangerouslyAllowBrowser: true
+      };
+    }
+    
     chat = {
       completions: {
         create: jest.fn().mockImplementation(async ({ messages, stream }) => {
@@ -80,7 +126,7 @@ describe('Chat API Route', () => {
 
   it('正常なリクエストに対して200レスポンスを返すこと', async () => {
     // リクエストの作成
-    const req = new NextRequest('https://example.com/api/chat', {
+    const req = new MockNextRequest('https://example.com/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -108,7 +154,7 @@ describe('Chat API Route', () => {
 
   it('ストリーミングモードで正常にレスポンスを返すこと', async () => {
     // リクエストの作成
-    const req = new NextRequest('https://example.com/api/chat', {
+    const req = new MockNextRequest('https://example.com/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -152,7 +198,7 @@ describe('Chat API Route', () => {
 
   it('無効なリクエストに対して400エラーを返すこと', async () => {
     // 無効なリクエスト（messagesフィールドなし）
-    const req = new NextRequest('https://example.com/api/chat', {
+    const req = new MockNextRequest('https://example.com/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,14 +216,14 @@ describe('Chat API Route', () => {
     expect(response.status).toBe(400);
     
     // エラーメッセージの検証
-    const errorData = await response.json();
-    expect(errorData).toHaveProperty('error');
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty('error');
   });
 
   // レート制限のテストはスキップ（実際のテストでは時間がかかるため）
   it.skip('レート制限を超えた場合に429エラーを返すこと', async () => {
     // レート制限を超えるリクエストを送信
-    const req = new NextRequest('https://example.com/api/chat', {
+    const req = new MockNextRequest('https://example.com/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -202,7 +248,7 @@ describe('Chat API Route', () => {
     expect(response.status).toBe(429);
     
     // エラーメッセージの検証
-    const errorData = await response.json();
-    expect(errorData).toHaveProperty('error');
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty('error');
   });
 }); 

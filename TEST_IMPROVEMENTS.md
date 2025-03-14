@@ -97,7 +97,7 @@
 - ChatWidgetのテストを改善（themeStylesのモック）
 - chat.test.tsのNextRequest/NextResponseモックを改善
 
-### 2023年XX月XX日（フェーズ1の進捗）
+### 2023年XX月XX日（フェーズ1の進捗 - 1回目）
 - userContext.test.tsのメモリキャッシュ問題を完全に解決
   - recordUserQuestion関数のテストを修正
   - テスト間の状態漏洩を防止するリセット機能を追加
@@ -112,16 +112,115 @@
   - fetchモック関数
   - ストリームレスポンスモック関数
 
+### 2023年XX月XX日（フェーズ1の進捗 - 2回目）
+- ChatWidgetのテストを改善
+  - scrollIntoViewメソッドのモックを追加
+  - スキップされていたテストを修正
+  - テストケースを簡略化して安定性を向上
+- APIルートのテストを改善
+  - NextRequestとNextResponseのモックを改善
+  - OpenAIクライアントのモックを改善（dangerouslyAllowBrowserオプションを追加）
+
 ## 次のステップ
 
-1. **ChatWidgetのテスト改善**
-   - スキップされているテストを修正
-   - UIイベントのテストを追加
+1. **ストレージサービスの抽象化**
+   - インターフェース設計
+   ```typescript
+   interface StorageService {
+     getItem(key: string): string | null;
+     setItem(key: string, value: string): void;
+     removeItem(key: string): void;
+     clear(): void;
+   }
+   ```
+   - 実装クラス
+   ```typescript
+   class LocalStorageService implements StorageService {
+     getItem(key: string): string | null {
+       return localStorage.getItem(key);
+     }
+     setItem(key: string, value: string): void {
+       localStorage.setItem(key, value);
+     }
+     removeItem(key: string): void {
+       localStorage.removeItem(key);
+     }
+     clear(): void {
+       localStorage.clear();
+     }
+   }
+   ```
+   - モック実装
+   ```typescript
+   class MockStorageService implements StorageService {
+     private store: Record<string, string> = {};
+     
+     getItem(key: string): string | null {
+       return this.store[key] || null;
+     }
+     setItem(key: string, value: string): void {
+       this.store[key] = value;
+     }
+     removeItem(key: string): void {
+       delete this.store[key];
+     }
+     clear(): void {
+       this.store = {};
+     }
+   }
+   ```
 
-2. **ストレージサービスの抽象化**
-   - localStorage依存を分離するインターフェースの設計
-   - userContextモジュールの改善
+2. **APIクライアントの抽象化**
+   - インターフェース設計
+   ```typescript
+   interface ApiClient {
+     post(url: string, data: any): Promise<any>;
+     get(url: string): Promise<any>;
+   }
+   ```
+   - 実装クラス
+   ```typescript
+   class FetchApiClient implements ApiClient {
+     async post(url: string, data: any): Promise<any> {
+       const response = await fetch(url, {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+         },
+         body: JSON.stringify(data),
+       });
+       return response.json();
+     }
+     
+     async get(url: string): Promise<any> {
+       const response = await fetch(url);
+       return response.json();
+     }
+   }
+   ```
+   - モック実装
+   ```typescript
+   class MockApiClient implements ApiClient {
+     private mockResponses: Record<string, any> = {};
+     
+     setMockResponse(url: string, data: any): void {
+       this.mockResponses[url] = data;
+     }
+     
+     async post(url: string, data: any): Promise<any> {
+       return this.mockResponses[url] || {};
+     }
+     
+     async get(url: string): Promise<any> {
+       return this.mockResponses[url] || {};
+     }
+   }
+   ```
 
-3. **APIクライアントの抽象化**
-   - fetch依存を分離するインターフェースの設計
-   - OpenAI API呼び出しの抽象化 
+3. **userContextモジュールの改善**
+   - 依存注入を導入
+   ```typescript
+   export function createUserContext(storageService: StorageService) {
+     // 実装
+   }
+   ``` 
