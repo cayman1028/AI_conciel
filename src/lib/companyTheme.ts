@@ -1,6 +1,6 @@
 /**
  * 法人テーマ管理ユーティリティ
- * 法人IDに基づいて適切なテーマを読み込む機能を提供します
+ * 法人IDに基づいて適切なテーマ設定を読み込む機能を提供します
  */
 
 import { defaultTheme } from '../companies/default/theme';
@@ -41,6 +41,74 @@ export async function getCompanyTheme(companyId: string = 'default') {
     console.error(`法人テーマの読み込みエラー:`, error);
     return defaultTheme;
   }
+}
+
+/**
+ * テーマからCSSプロパティを生成する
+ * @param theme テーマオブジェクト
+ * @returns CSSプロパティオブジェクト
+ */
+export function generateThemeStyles(theme: any) {
+  return {
+    // チャットボタン
+    chatButtonStyle: {
+      backgroundColor: theme.colors.primary,
+      boxShadow: `0 4px 12px ${theme.colors.primary}40`,
+    },
+    
+    // チャットヘッダー
+    chatHeaderStyle: {
+      backgroundColor: theme.colors.primary,
+    },
+    
+    // ユーザーメッセージ
+    userMessageStyle: {
+      backgroundColor: theme.colors.primary,
+      color: theme.colors.text.inverse,
+    },
+    
+    // ボットメッセージ
+    botMessageStyle: {
+      backgroundColor: theme.chatWidget?.bubbleColors?.assistant || theme.colors.surface,
+      color: theme.colors.text.primary,
+    },
+    
+    // 送信ボタン
+    sendButtonStyle: {
+      backgroundColor: theme.colors.primary,
+    },
+    
+    // 送信ボタン（ホバー時）
+    sendButtonHoverStyle: {
+      backgroundColor: theme.colors.secondary,
+    }
+  };
+}
+
+/**
+ * CSSカスタムプロパティを生成する
+ * @param theme テーマオブジェクト
+ * @returns CSSカスタムプロパティの文字列
+ */
+export function generateCssVariables(theme: any) {
+  return `
+    --primary-color: ${theme.colors.primary};
+    --secondary-color: ${theme.colors.secondary};
+    --accent-color: ${theme.colors.accent};
+    --background-color: ${theme.colors.background};
+    --surface-color: ${theme.colors.surface};
+    --text-primary-color: ${theme.colors.text.primary};
+    --text-secondary-color: ${theme.colors.text.secondary};
+    --text-disabled-color: ${theme.colors.text.disabled};
+    --text-inverse-color: ${theme.colors.text.inverse};
+    --success-color: ${theme.colors.status.success};
+    --warning-color: ${theme.colors.status.warning};
+    --error-color: ${theme.colors.status.error};
+    --info-color: ${theme.colors.status.info};
+    --border-radius: ${theme.borders.radius.md};
+    --chat-bubble-user-color: ${theme.chatWidget?.bubbleColors?.user || theme.colors.primary};
+    --chat-bubble-assistant-color: ${theme.chatWidget?.bubbleColors?.assistant || theme.colors.surface};
+  `;
 }
 
 /**

@@ -1,5 +1,6 @@
 'use client';
 
+import { applyCompanyTheme, generateCssVariables, generateThemeStyles, getCompanyTheme } from '@/lib/companyTheme';
 import {
     generateContextPrompt,
     recordUserQuestion,
@@ -45,12 +46,43 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [userContextPrompt, setUserContextPrompt] = useState('');
+  const [themeStyles, setThemeStyles] = useState<any>({});
+  const [cssVars, setCssVars] = useState<string>('');
+  
+  // テーマの読み込み
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        // 法人IDに基づいてテーマを取得
+        const theme = await getCompanyTheme(companyId);
+        
+        // テーマからスタイルを生成
+        const styles = generateThemeStyles(theme);
+        setThemeStyles(styles);
+        
+        // CSSカスタムプロパティを生成
+        const cssVariables = generateCssVariables(theme);
+        setCssVars(cssVariables);
+        
+        // ドキュメント全体にテーマを適用
+        if (typeof window !== 'undefined') {
+          await applyCompanyTheme(companyId);
+        }
+        
+        console.log(`法人ID "${companyId}" のテーマを適用しました`);
+      } catch (error) {
+        console.error('テーマの読み込みエラー:', error);
+      }
+    };
+    
+    loadTheme();
+  }, [companyId]);
   
   // メッセージの読み込み
   const loadMessagesFromStorage = (): Message[] => {
     if (typeof window === 'undefined') return [];
     
-    const storedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
+    const storedMessages = localStorage.getItem(`${STORAGE_KEY_MESSAGES}_${companyId}`);
     if (storedMessages) {
       return JSON.parse(storedMessages);
     }
@@ -68,7 +100,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   const loadHistoryFromStorage = () => {
     if (typeof window === 'undefined') return [];
     
-    const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+    const storedHistory = localStorage.getItem(`${STORAGE_KEY_HISTORY}_${companyId}`);
     if (storedHistory) {
       return JSON.parse(storedHistory);
     }
@@ -100,27 +132,37 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
         { role: 'assistant', content: greeting }
       ]);
     }
-  }, []);
+  }, [companyId]);
   
   // メッセージの保存
   useEffect(() => {
     if (typeof window !== 'undefined' && messages.length > 0) {
-      localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
+      localStorage.setItem(`${STORAGE_KEY_MESSAGES}_${companyId}`, JSON.stringify(messages));
     }
-  }, [messages]);
+  }, [messages, companyId]);
   
   // 履歴の保存
   useEffect(() => {
     if (typeof window !== 'undefined' && history.length > 0) {
-      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
+      localStorage.setItem(`${STORAGE_KEY_HISTORY}_${companyId}`, JSON.stringify(history));
     }
-  }, [history]);
+  }, [history, companyId]);
   
   // チャットの参照
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
   // メッセージ表示エリアの末尾への参照
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // チャットウィジェットのルート要素への参照
+  const chatWidgetRef = useRef<HTMLDivElement>(null);
+  
+  // CSSカスタムプロパティの適用
+  useEffect(() => {
+    if (chatWidgetRef.current && cssVars) {
+      chatWidgetRef.current.setAttribute('style', cssVars);
+    }
+  }, [cssVars]);
   
   // 自動スクロール関数
   const scrollToBottom = () => {
@@ -275,12 +317,13 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   }, [isExpanded]);
   
   return (
-    <div className={styles.chatWidget}>
+    <div className={styles.chatWidget} ref={chatWidgetRef}>
       {!isExpanded ? (
         <button 
           className={styles.chatButton}
           onClick={() => setIsExpanded(true)}
           aria-label="サポート"
+          style={themeStyles.chatButtonStyle}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -290,7 +333,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
         </button>
       ) : (
         <div className={styles.chatContainer}>
-          <div className={styles.chatHeader}>
+          <div className={styles.chatHeader} style={themeStyles.chatHeaderStyle}>
             <div className={styles.chatTitle}>
               AIコンシェル
             </div>
@@ -318,6 +361,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
                 <div key={index} className={styles.messageWrapper}>
                   <div 
                     className={`${styles.message} ${message.isUser ? styles.userMessage : styles.botMessage}`}
+                    style={message.isUser ? themeStyles.userMessageStyle : themeStyles.botMessageStyle}
                   >
                     {message.text}
                   </div>
@@ -352,6 +396,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
               className={styles.sendButton}
               disabled={!inputValue.trim() || isLoading}
               aria-label="送信"
+              style={themeStyles.sendButtonStyle}
             >
               送信
             </button>
