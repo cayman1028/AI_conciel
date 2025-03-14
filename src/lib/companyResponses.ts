@@ -274,7 +274,7 @@ export async function updateResponseTemplate(
  */
 export function clearResponsesCache(companyId?: string) {
   if (companyId) {
-    delete responsesCache[companyId];
+  delete responsesCache[companyId];
     delete categoryCache[companyId];
     console.log(`法人ID "${companyId}" の応答テンプレートキャッシュをクリアしました`);
   } else {
