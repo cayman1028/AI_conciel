@@ -121,106 +121,41 @@
   - NextRequestとNextResponseのモックを改善
   - OpenAIクライアントのモックを改善（dangerouslyAllowBrowserオプションを追加）
 
+### 2023年XX月XX日（フェーズ2の進捗 - 1回目）
+- ストレージサービスの抽象化を実装
+  - `StorageService`インターフェースを作成
+  - `LocalStorageService`と`MemoryStorageService`の実装クラスを作成
+  - テストを追加（src/__tests__/lib/services/storageService.test.ts）
+- APIクライアントの抽象化を実装
+  - `ApiClient`インターフェースを作成
+  - `FetchApiClient`と`MockApiClient`の実装クラスを作成
+  - テストを追加（src/__tests__/lib/services/apiClient.test.ts）
+- OpenAIサービスの抽象化を実装
+  - `OpenAIService`インターフェースを作成
+  - `OpenAIApiService`と`MockOpenAIService`の実装クラスを作成
+  - テストを追加（src/__tests__/lib/services/openaiService.test.ts）
+  - warmupルートを更新して新しいOpenAIサービスを使用するように変更
+
 ## 次のステップ
 
-1. **ストレージサービスの抽象化**
-   - インターフェース設計
-   ```typescript
-   interface StorageService {
-     getItem(key: string): string | null;
-     setItem(key: string, value: string): void;
-     removeItem(key: string): void;
-     clear(): void;
-   }
-   ```
-   - 実装クラス
-   ```typescript
-   class LocalStorageService implements StorageService {
-     getItem(key: string): string | null {
-       return localStorage.getItem(key);
-     }
-     setItem(key: string, value: string): void {
-       localStorage.setItem(key, value);
-     }
-     removeItem(key: string): void {
-       localStorage.removeItem(key);
-     }
-     clear(): void {
-       localStorage.clear();
-     }
-   }
-   ```
-   - モック実装
-   ```typescript
-   class MockStorageService implements StorageService {
-     private store: Record<string, string> = {};
-     
-     getItem(key: string): string | null {
-       return this.store[key] || null;
-     }
-     setItem(key: string, value: string): void {
-       this.store[key] = value;
-     }
-     removeItem(key: string): void {
-       delete this.store[key];
-     }
-     clear(): void {
-       this.store = {};
-     }
-   }
-   ```
-
-2. **APIクライアントの抽象化**
-   - インターフェース設計
-   ```typescript
-   interface ApiClient {
-     post(url: string, data: any): Promise<any>;
-     get(url: string): Promise<any>;
-   }
-   ```
-   - 実装クラス
-   ```typescript
-   class FetchApiClient implements ApiClient {
-     async post(url: string, data: any): Promise<any> {
-       const response = await fetch(url, {
-         method: 'POST',
-         headers: {
-           'Content-Type': 'application/json',
-         },
-         body: JSON.stringify(data),
-       });
-       return response.json();
-     }
-     
-     async get(url: string): Promise<any> {
-       const response = await fetch(url);
-       return response.json();
-     }
-   }
-   ```
-   - モック実装
-   ```typescript
-   class MockApiClient implements ApiClient {
-     private mockResponses: Record<string, any> = {};
-     
-     setMockResponse(url: string, data: any): void {
-       this.mockResponses[url] = data;
-     }
-     
-     async post(url: string, data: any): Promise<any> {
-       return this.mockResponses[url] || {};
-     }
-     
-     async get(url: string): Promise<any> {
-       return this.mockResponses[url] || {};
-     }
-   }
-   ```
-
-3. **userContextモジュールの改善**
+1. **userContextモジュールの改善**
    - 依存注入を導入
    ```typescript
    export function createUserContext(storageService: StorageService) {
+     // 実装
+   }
+   ```
+   - ストレージサービスを使用するように更新
+
+2. **APIルートの改善**
+   - OpenAIサービスを使用するように更新
+   - APIクライアントを使用するように更新
+
+3. **ChatWidgetの改善**
+   - APIクライアントを使用するように更新
+   - 依存注入を導入
+   ```typescript
+   export function createChatWidget(apiClient: ApiClient) {
      // 実装
    }
    ``` 

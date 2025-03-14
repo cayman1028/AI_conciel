@@ -33,7 +33,10 @@ class MockNextResponse extends originalNextResponse {
   static json(data, init = {}) {
     const jsonString = JSON.stringify(data);
     const response = new MockNextResponse(jsonString, init);
-    response.headers.set('Content-Type', 'application/json');
+    response.headers = new Headers({
+      'Content-Type': 'application/json',
+      ...(init?.headers || {})
+    });
     return response;
   }
 }
