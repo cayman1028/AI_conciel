@@ -6,7 +6,13 @@
 import { defaultConfig } from '../companies/default/config';
 
 // 設定のキャッシュ（パフォーマンス向上のため）
-const configCache: Record<string, any> = {};
+const configCache: Record<string, any> = {
+  // デフォルト設定を事前にキャッシュ
+  'default': defaultConfig
+};
+
+// 設定のロード状態を追跡（並行リクエストの最適化）
+const configLoadPromises: Record<string, Promise<any> | undefined> = {};
 
 /**
  * 法人IDに基づいて設定を取得する
@@ -14,31 +20,64 @@ const configCache: Record<string, any> = {};
  * @returns 法人設定オブジェクト
  */
 export async function getCompanyConfig(companyId: string = 'default') {
-  // キャッシュに存在する場合はキャッシュから返す
+  // キャッシュに存在する場合はキャッシュから即時返す
   if (configCache[companyId]) {
     return configCache[companyId];
   }
 
+  // 既に同じ法人IDのロードが進行中の場合は、そのPromiseを返す（重複リクエスト防止）
+  if (configLoadPromises[companyId]) {
+    return configLoadPromises[companyId];
+  }
+
+  // 新しいロードプロセスを開始
+  const loadPromise = loadCompanyConfig(companyId);
+  configLoadPromises[companyId] = loadPromise;
+  
   try {
-    // 法人IDに基づいて動的にモジュールをインポート
+    const config = await loadPromise;
+    // ロードが完了したらプロミスを削除
+    delete configLoadPromises[companyId];
+    return config;
+  } catch (error) {
+    // エラー時もプロミスを削除
+    delete configLoadPromises[companyId];
+    throw error;
+  }
+}
+
+/**
+ * 法人設定を実際に読み込む内部関数
+ * @param companyId 法人ID
+ * @returns 設定オブジェクト
+ */
+async function loadCompanyConfig(companyId: string): Promise<any> {
+  try {
+    // デフォルトの場合はキャッシュから返す
     if (companyId === 'default') {
-      configCache[companyId] = defaultConfig;
       return defaultConfig;
     }
 
     // 法人固有の設定を動的にインポート
     const companyConfig = await import(`../companies/${companyId}/config`)
-      .then(module => module.default || defaultConfig)
-      .catch(() => {
-        console.warn(`法人ID "${companyId}" の設定が見つかりません。デフォルト設定を使用します。`);
+      .then(module => {
+        const config = module.default || defaultConfig;
+        // キャッシュに保存
+        configCache[companyId] = config;
+        return config;
+      })
+      .catch((error) => {
+        console.warn(`法人ID "${companyId}" の設定が見つかりません。デフォルト設定を使用します。`, error);
+        // エラー時もデフォルト設定をキャッシュ
+        configCache[companyId] = defaultConfig;
         return defaultConfig;
       });
 
-    // キャッシュに保存
-    configCache[companyId] = companyConfig;
     return companyConfig;
   } catch (error) {
     console.error(`法人設定の読み込みエラー:`, error);
+    // エラー時もデフォルト設定をキャッシュ
+    configCache[companyId] = defaultConfig;
     return defaultConfig;
   }
 }
@@ -82,4 +121,23 @@ export function getCompanyIdFromUrl(): string {
   }
   
   return 'default';
+}
+
+/**
+ * 設定キャッシュをクリアする（開発環境用）
+ * @param companyId 特定の法人IDのキャッシュをクリアする場合は指定、未指定の場合は全てクリア
+ */
+export function clearConfigCache(companyId?: string) {
+  if (companyId) {
+    delete configCache[companyId];
+    console.log(`法人ID "${companyId}" の設定キャッシュをクリアしました`);
+  } else {
+    // デフォルト設定は保持
+    const defaultConfigCopy = configCache['default'];
+    Object.keys(configCache).forEach(key => {
+      delete configCache[key];
+    });
+    configCache['default'] = defaultConfigCopy;
+    console.log('全ての設定キャッシュをクリアしました（デフォルト設定を除く）');
+  }
 } 

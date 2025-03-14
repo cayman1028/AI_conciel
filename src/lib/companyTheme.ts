@@ -6,7 +6,13 @@
 import { defaultTheme } from '../companies/default/theme';
 
 // テーマのキャッシュ（パフォーマンス向上のため）
-const themeCache: Record<string, any> = {};
+const themeCache: Record<string, any> = {
+  // デフォルトテーマを事前にキャッシュ
+  'default': defaultTheme
+};
+
+// テーマのロード状態を追跡（並行リクエストの最適化）
+const themeLoadPromises: Record<string, Promise<any> | undefined> = {};
 
 /**
  * 法人IDに基づいてテーマを取得する
@@ -14,31 +20,64 @@ const themeCache: Record<string, any> = {};
  * @returns 法人テーマオブジェクト
  */
 export async function getCompanyTheme(companyId: string = 'default') {
-  // キャッシュに存在する場合はキャッシュから返す
+  // キャッシュに存在する場合はキャッシュから即時返す
   if (themeCache[companyId]) {
     return themeCache[companyId];
   }
+  
+  // 既に同じ法人IDのロードが進行中の場合は、そのPromiseを返す（重複リクエスト防止）
+  if (themeLoadPromises[companyId]) {
+    return themeLoadPromises[companyId];
+  }
 
+  // 新しいロードプロセスを開始
+  const loadPromise = loadCompanyTheme(companyId);
+  themeLoadPromises[companyId] = loadPromise;
+  
   try {
-    // 法人IDに基づいて動的にモジュールをインポート
+    const theme = await loadPromise;
+    // ロードが完了したらプロミスを削除
+    delete themeLoadPromises[companyId];
+    return theme;
+  } catch (error) {
+    // エラー時もプロミスを削除
+    delete themeLoadPromises[companyId];
+    throw error;
+  }
+}
+
+/**
+ * 法人テーマを実際に読み込む内部関数
+ * @param companyId 法人ID
+ * @returns テーマオブジェクト
+ */
+async function loadCompanyTheme(companyId: string): Promise<any> {
+  try {
+    // デフォルトの場合はキャッシュから返す
     if (companyId === 'default') {
-      themeCache[companyId] = defaultTheme;
       return defaultTheme;
     }
 
     // 法人固有のテーマを動的にインポート
     const companyTheme = await import(`../companies/${companyId}/theme`)
-      .then(module => module.default || defaultTheme)
-      .catch(() => {
-        console.warn(`法人ID "${companyId}" のテーマが見つかりません。デフォルトテーマを使用します。`);
+      .then(module => {
+        const theme = module.default || defaultTheme;
+        // キャッシュに保存
+        themeCache[companyId] = theme;
+        return theme;
+      })
+      .catch((error) => {
+        console.warn(`法人ID "${companyId}" のテーマが見つかりません。デフォルトテーマを使用します。`, error);
+        // エラー時もデフォルトテーマをキャッシュ
+        themeCache[companyId] = defaultTheme;
         return defaultTheme;
       });
 
-    // キャッシュに保存
-    themeCache[companyId] = companyTheme;
     return companyTheme;
   } catch (error) {
     console.error(`法人テーマの読み込みエラー:`, error);
+    // エラー時もデフォルトテーマをキャッシュ
+    themeCache[companyId] = defaultTheme;
     return defaultTheme;
   }
 }
@@ -183,5 +222,24 @@ export async function getThemeProperty(
   } catch (error) {
     console.error(`テーマプロパティの取得エラー:`, error);
     return defaultValue;
+  }
+}
+
+/**
+ * テーマキャッシュをクリアする（開発環境用）
+ * @param companyId 特定の法人IDのキャッシュをクリアする場合は指定、未指定の場合は全てクリア
+ */
+export function clearThemeCache(companyId?: string) {
+  if (companyId) {
+    delete themeCache[companyId];
+    console.log(`法人ID "${companyId}" のテーマキャッシュをクリアしました`);
+  } else {
+    // デフォルトテーマは保持
+    const defaultThemeCopy = themeCache['default'];
+    Object.keys(themeCache).forEach(key => {
+      delete themeCache[key];
+    });
+    themeCache['default'] = defaultThemeCopy;
+    console.log('全てのテーマキャッシュをクリアしました（デフォルトテーマを除く）');
   }
 } 
