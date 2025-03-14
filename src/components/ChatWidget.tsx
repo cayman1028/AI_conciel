@@ -628,6 +628,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
         <div 
           className={`${styles.message} ${message.isUser ? styles.userMessage : styles.botMessage}`}
           style={message.isUser ? themeStyles.userMessageStyle : themeStyles.botMessageStyle}
+          data-testid={message.isUser ? "user-message" : "assistant-message"}
         >
           {message.text}
         </div>
@@ -636,7 +637,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   }, [messages, themeStyles.userMessageStyle, themeStyles.botMessageStyle]);
   
   return (
-    <div className={styles.chatWidget} ref={chatWidgetRef}>
+    <div className={styles.chatWidget} ref={chatWidgetRef} data-testid="chat-widget">
       {!isExpanded ? (
         <button 
           className={styles.chatButton}
@@ -644,39 +645,33 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
           aria-label="サポート"
           style={themeStyles.chatButtonStyle}
           onMouseEnter={warmupApiConnection} // ホバー時にAPIをプリウォーミング
+          data-testid="chat-button"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
             <line x1="8" y1="8" x2="16" y2="8" strokeWidth="1.5"></line>
-            <line x1="8" y1="12" x2="16" y2="12" strokeWidth="1.5"></line>
+            <line x1="8" y1="12" x2="14" y2="12" strokeWidth="1.5"></line>
           </svg>
         </button>
       ) : (
-        <div className={styles.chatContainer}>
+        <div className={styles.chatContainer} style={{ ...themeStyles.chatContainerStyle, '--chat-vars': cssVars } as React.CSSProperties}>
           <div className={styles.chatHeader} style={themeStyles.chatHeaderStyle}>
-            <div className={styles.chatTitle}>
-              AIコンシェル
-            </div>
-            <div className={styles.chatControls}>
-              <button 
-                onClick={handleClearHistory}
-                className={styles.clearButton}
-                aria-label="履歴をクリア"
-              >
-                履歴をクリア
-              </button>
-              <button 
-                onClick={() => setIsExpanded(false)}
-                className={styles.closeButton}
-                aria-label="閉じる"
-              >
-                ×
-              </button>
-            </div>
+            <div className={styles.chatTitle}>AIコンシェル</div>
+            <button 
+              className={styles.closeButton}
+              onClick={() => setIsExpanded(false)}
+              aria-label="閉じる"
+              data-testid="close-button"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
           </div>
           
-          <div className={styles.chatMessages} ref={chatContainerRef}>
-            <div className={styles.messagesContainer}>
+          <div className={styles.chatBody}>
+            <div className={styles.messagesContainer} ref={chatContainerRef}>
               {messagesList}
               
               {/* ストリーミング中のテキスト表示 */}
@@ -685,6 +680,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
                   <div 
                     className={`${styles.message} ${styles.botMessage}`}
                     style={themeStyles.botMessageStyle}
+                    data-testid="assistant-message"
                   >
                     {currentStreamedText}
                   </div>
@@ -693,7 +689,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
               
               {/* ローディング表示（ストリーミング中は表示しない） */}
               {isLoading && !currentStreamedText && (
-                <div className={styles.typingIndicator}>
+                <div className={styles.typingIndicator} data-testid="typing-indicator">
                   <span className={styles.dot}></span>
                   <span className={styles.dot}></span>
                   <span className={styles.dot}></span>
@@ -714,6 +710,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
               rows={1}
               className={styles.inputField}
               disabled={isLoading}
+              data-testid="chat-input"
             />
             <button 
               onClick={handleSendMessage}
@@ -721,6 +718,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
               disabled={!inputValue.trim() || isLoading}
               aria-label="送信"
               style={themeStyles.sendButtonStyle}
+              data-testid="send-button"
             >
               送信
             </button>

@@ -12,28 +12,175 @@ process.env = {
   ALLOWED_ORIGINS: '*',
 };
 
-// localStorageのモック
-const localStorageMock = (function() {
-  let store = {};
-  return {
-    getItem: jest.fn(key => {
-      return store[key] || null;
-    }),
-    setItem: jest.fn((key, value) => {
-      store[key] = value.toString();
-    }),
-    removeItem: jest.fn(key => {
-      delete store[key];
-    }),
-    clear: jest.fn(() => {
-      store = {};
-    }),
-  };
-})();
+// Jest setup file
+const { TextEncoder, TextDecoder } = require('util');
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
+// TextEncoderとTextDecoderをグローバルに設定
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+
+// MSWに必要なグローバルオブジェクト
+if (typeof global.Response === 'undefined') {
+  global.Response = class Response {
+    constructor(body, init = {}) {
+      this.body = body;
+      this.status = init.status || 200;
+      this.statusText = init.statusText || '';
+      this.headers = new Headers(init.headers);
+      this.type = 'basic';
+      this.url = '';
+      this.ok = this.status >= 200 && this.status < 300;
+    }
+    
+    json() {
+      return Promise.resolve(JSON.parse(this.body));
+    }
+    
+    text() {
+      return Promise.resolve(this.body);
+    }
+  };
+}
+
+if (typeof global.Request === 'undefined') {
+  global.Request = class Request {
+    #url;
+    #method;
+    #headers;
+    #body;
+    
+    constructor(input, init = {}) {
+      this.#url = input;
+      this.#method = init.method || 'GET';
+      this.#headers = new Headers(init.headers);
+      this.#body = init.body || null;
+    }
+    
+    get url() {
+      return this.#url;
+    }
+    
+    get method() {
+      return this.#method;
+    }
+    
+    get headers() {
+      return this.#headers;
+    }
+    
+    get body() {
+      return this.#body;
+    }
+  };
+}
+
+if (typeof global.Headers === 'undefined') {
+  global.Headers = class Headers {
+    constructor(init = {}) {
+      this.headers = {};
+      if (init) {
+        Object.keys(init).forEach(key => {
+          this.headers[key.toLowerCase()] = init[key];
+        });
+      }
+    }
+    
+    append(name, value) {
+      this.headers[name.toLowerCase()] = value;
+    }
+    
+    delete(name) {
+      delete this.headers[name.toLowerCase()];
+    }
+    
+    get(name) {
+      return this.headers[name.toLowerCase()] || null;
+    }
+    
+    has(name) {
+      return name.toLowerCase() in this.headers;
+    }
+    
+    set(name, value) {
+      this.headers[name.toLowerCase()] = value;
+    }
+  };
+}
+
+// ReadableStreamのモック
+if (typeof global.ReadableStream === 'undefined') {
+  global.ReadableStream = class ReadableStream {
+    constructor(source) {
+      this.source = source;
+      if (source && source.start) {
+        this.controller = {
+          enqueue: jest.fn(),
+          close: jest.fn(),
+          error: jest.fn(),
+        };
+        source.start(this.controller);
+      }
+    }
+    
+    getReader() {
+      return {
+        read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+        cancel: jest.fn(),
+        releaseLock: jest.fn(),
+        closed: Promise.resolve(),
+      };
+    }
+  };
+}
+
+// BroadcastChannelのモック追加
+if (typeof global.BroadcastChannel === 'undefined') {
+  global.BroadcastChannel = class BroadcastChannel {
+    constructor(name) {
+      this.name = name;
+      this.onmessage = null;
+      this.onmessageerror = null;
+    }
+    
+    postMessage(message) {
+      // メッセージ送信のモック
+      if (this.onmessage) {
+        const event = { data: message };
+        setTimeout(() => this.onmessage(event), 0);
+      }
+    }
+    
+    close() {
+      // チャンネルを閉じるモック
+    }
+  };
+}
+
+// localStorageのモック
+class LocalStorageMock {
+  constructor() {
+    this.store = {};
+  }
+
+  clear() {
+    this.store = {};
+  }
+
+  getItem(key) {
+    return this.store[key] || null;
+  }
+
+  setItem(key, value) {
+    this.store[key] = String(value);
+  }
+
+  removeItem(key) {
+    delete this.store[key];
+  }
+}
+
+// localStorageをグローバルに設定
+global.localStorage = new LocalStorageMock();
 
 // fetchのモック
 global.fetch = jest.fn();
