@@ -48,6 +48,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   const [userContextPrompt, setUserContextPrompt] = useState('');
   const [themeStyles, setThemeStyles] = useState<any>({});
   const [cssVars, setCssVars] = useState<string>('');
+  const [currentStreamedText, setCurrentStreamedText] = useState('');
   
   // テーマの読み込み
   useEffect(() => {
@@ -175,7 +176,7 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
   // メッセージが変更されたら自動スクロール
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, currentStreamedText]);
   
   // ユーザーコンテキストの更新
   useEffect(() => {
@@ -185,6 +186,98 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
       setUserContextPrompt(contextPrompt);
     }
   }, [history]);
+  
+  // ストリーミングレスポンスの処理
+  const handleStreamResponse = async (response: Response) => {
+    if (!response.body) {
+      throw new Error('レスポンスボディがありません');
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let streamedText = '';
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // デコードしてテキストを取得
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Server-Sent Eventsの形式を解析
+        const lines = chunk.split('\n\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              
+              if (data.type === 'chunk') {
+                // テキストチャンクを追加
+                streamedText += data.content;
+                setCurrentStreamedText(streamedText);
+              } 
+              else if (data.type === 'complete') {
+                // 完了メッセージを処理
+                const assistantMessage = data.message.content;
+                
+                // ストリーミング表示をクリア
+                setCurrentStreamedText('');
+                
+                // 応答メッセージを追加
+                setMessages(prevMessages => [
+                  ...prevMessages,
+                  { text: assistantMessage, isUser: false }
+                ]);
+                
+                // 会話履歴の更新
+                setHistory(prevHistory => [
+                  ...prevHistory,
+                  { role: 'assistant', content: assistantMessage }
+                ]);
+                
+                // トピックの保存
+                if (data.topics && Array.isArray(data.topics) && data.topics.length > 0) {
+                  saveConversationTopics(data.topics);
+                  if (data.topics[0]) {
+                    updateTopic(data.topics[0], assistantMessage.substring(0, 100) + '...');
+                  }
+                }
+                
+                // ローディング表示を非表示
+                setIsLoading(false);
+              } 
+              else if (data.type === 'error') {
+                // エラーメッセージを表示
+                setMessages(prevMessages => [
+                  ...prevMessages,
+                  { text: data.error || 'エラーが発生しました。もう一度お試しください。', isUser: false }
+                ]);
+                
+                // ローディング表示を非表示
+                setIsLoading(false);
+                setCurrentStreamedText('');
+              }
+            } catch (e) {
+              console.error('ストリームデータの解析エラー:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('ストリーム読み取りエラー:', error);
+      
+      // エラー時はローディング表示を非表示
+      setIsLoading(false);
+      setCurrentStreamedText('');
+      
+      // エラーメッセージを表示
+      setMessages(prevMessages => [
+        ...prevMessages,
+        { text: 'ストリーミング中にエラーが発生しました。もう一度お試しください。', isUser: false }
+      ]);
+    }
+  };
   
   // メッセージの送信処理
   const handleSendMessage = async () => {
@@ -215,20 +308,22 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
     
     // ローディング表示
     setIsLoading(true);
+    setCurrentStreamedText('');
     
     // 最新のユーザーコンテキストを生成
     const contextPrompt = generateContextPrompt();
     setUserContextPrompt(contextPrompt);
     
     try {
-      // APIリクエスト
+      // ストリーミングAPIリクエスト
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newHistory,
           userContext: contextPrompt,
-          companyId
+          companyId,
+          stream: true // ストリーミングモードを有効化
         }),
       });
       
@@ -236,40 +331,14 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
         throw new Error('APIリクエストに失敗しました');
       }
       
-      const data = await response.json();
-      const assistantMessage = data.message.content;
-      const cleanedMessage = assistantMessage.trim();
-      
-      // ローディング表示を非表示
-      setIsLoading(false);
-      
-      // 応答メッセージを追加
-      setMessages([
-        ...newMessages,
-        { text: cleanedMessage, isUser: false }
-      ]);
-      
-      // トピックの保存
-      if (data.topics && Array.isArray(data.topics) && data.topics.length > 0) {
-        saveConversationTopics(data.topics);
-        if (data.topics[0]) {
-          updateTopic(data.topics[0], cleanedMessage.substring(0, 100) + '...');
-        }
-      }
-      
-      // 会話履歴の更新
-      setHistory([
-        ...newHistory,
-        { role: 'assistant', content: cleanedMessage }
-      ]);
-      
-      // メッセージ追加後にスクロール
-      setTimeout(scrollToBottom, 50);
+      // ストリーミングレスポンスの処理
+      await handleStreamResponse(response);
       
     } catch (error) {
       console.error('エラー:', error);
       
       setIsLoading(false);
+      setCurrentStreamedText('');
       setMessages([
         ...newMessages,
         { text: 'すみません、エラーが発生しました。もう一度お試しください。', isUser: false }
@@ -368,8 +437,20 @@ export default function ChatWidget({ companyId = 'default' }: ChatWidgetProps) {
                 </div>
               ))}
               
-              {/* ローディング表示 */}
-              {isLoading && (
+              {/* ストリーミング中のテキスト表示 */}
+              {currentStreamedText && (
+                <div className={styles.messageWrapper}>
+                  <div 
+                    className={`${styles.message} ${styles.botMessage}`}
+                    style={themeStyles.botMessageStyle}
+                  >
+                    {currentStreamedText}
+                  </div>
+                </div>
+              )}
+              
+              {/* ローディング表示（ストリーミング中は表示しない） */}
+              {isLoading && !currentStreamedText && (
                 <div className={styles.typingIndicator}>
                   <span className={styles.dot}></span>
                   <span className={styles.dot}></span>

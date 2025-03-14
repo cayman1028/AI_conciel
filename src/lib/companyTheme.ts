@@ -1,33 +1,143 @@
 /**
  * 法人テーマ管理ユーティリティ
- * 法人IDに基づいて適切なテーマ設定を読み込む機能を提供します
+ * 法人IDに基づいて適切なテーマを読み込む機能を提供します
  */
 
 import { defaultTheme } from '../companies/default/theme';
 
+// テーマの型定義
+export interface CompanyTheme {
+  colors: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    background: string;
+    surface: string;
+    text: {
+      primary: string;
+      secondary: string;
+      disabled: string;
+      inverse: string;
+    };
+    status: {
+      success: string;
+      warning: string;
+      error: string;
+      info: string;
+    };
+  };
+  typography: {
+    fontFamily: {
+      base: string;
+      heading: string;
+      monospace: string;
+    };
+    fontSize: {
+      xs: string;
+      sm: string;
+      md: string;
+      lg: string;
+      xl: string;
+      '2xl': string;
+      '3xl': string;
+      '4xl': string;
+    };
+    fontWeight: {
+      light: number;
+      normal: number;
+      medium: number;
+      bold: number;
+    };
+    lineHeight: {
+      tight: number;
+      normal: number;
+      loose: number;
+    };
+  };
+  spacing: {
+    xs: string;
+    sm: string;
+    md: string;
+    lg: string;
+    xl: string;
+    '2xl': string;
+    '3xl': string;
+  };
+  borders: {
+    radius: {
+      sm: string;
+      md: string;
+      lg: string;
+      xl: string;
+      full: string;
+    };
+    width: {
+      thin: string;
+      medium: string;
+      thick: string;
+    };
+  };
+  shadows: {
+    sm: string;
+    md: string;
+    lg: string;
+    xl: string;
+  };
+  transitions: {
+    duration: {
+      fast: string;
+      normal: string;
+      slow: string;
+    };
+    timing: {
+      ease: string;
+      linear: string;
+      easeIn: string;
+      easeOut: string;
+      easeInOut: string;
+    };
+  };
+  chatWidget: {
+    bubbleColors: {
+      user: string;
+      assistant: string;
+    };
+    inputHeight: string;
+    maxHeight: string;
+    width: string;
+    mobileWidth: string;
+    borderRadius: string;
+    boxShadow: string;
+  };
+  [key: string]: any; // インデックスシグネチャを追加して動的アクセスを許可
+}
+
 // テーマのキャッシュ（パフォーマンス向上のため）
-const themeCache: Record<string, any> = {
+const themeCache: Record<string, CompanyTheme> = {
   // デフォルトテーマを事前にキャッシュ
-  'default': defaultTheme
+  'default': defaultTheme as CompanyTheme
 };
 
 // テーマのロード状態を追跡（並行リクエストの最適化）
-const themeLoadPromises: Record<string, Promise<any> | undefined> = {};
+const themeLoadPromises: Record<string, Promise<CompanyTheme> | undefined> = {};
+
+// テーマプロパティのキャッシュ（特定のプロパティのみのキャッシュ）
+const themePropertyCache: Record<string, Record<string, any>> = {};
 
 /**
  * 法人IDに基づいてテーマを取得する
  * @param companyId 法人ID（未指定の場合はデフォルト）
  * @returns 法人テーマオブジェクト
  */
-export async function getCompanyTheme(companyId: string = 'default') {
+export async function getCompanyTheme(companyId: string = 'default'): Promise<CompanyTheme> {
   // キャッシュに存在する場合はキャッシュから即時返す
   if (themeCache[companyId]) {
     return themeCache[companyId];
   }
-  
+
   // 既に同じ法人IDのロードが進行中の場合は、そのPromiseを返す（重複リクエスト防止）
   if (themeLoadPromises[companyId]) {
-    return themeLoadPromises[companyId];
+    return themeLoadPromises[companyId] as Promise<CompanyTheme>;
   }
 
   // 新しいロードプロセスを開始
@@ -51,11 +161,11 @@ export async function getCompanyTheme(companyId: string = 'default') {
  * @param companyId 法人ID
  * @returns テーマオブジェクト
  */
-async function loadCompanyTheme(companyId: string): Promise<any> {
+async function loadCompanyTheme(companyId: string): Promise<CompanyTheme> {
   try {
     // デフォルトの場合はキャッシュから返す
     if (companyId === 'default') {
-      return defaultTheme;
+      return defaultTheme as CompanyTheme;
     }
 
     // 法人固有のテーマを動的にインポート
@@ -63,22 +173,205 @@ async function loadCompanyTheme(companyId: string): Promise<any> {
       .then(module => {
         const theme = module.default || defaultTheme;
         // キャッシュに保存
-        themeCache[companyId] = theme;
-        return theme;
+        themeCache[companyId] = theme as CompanyTheme;
+        return theme as CompanyTheme;
       })
       .catch((error) => {
         console.warn(`法人ID "${companyId}" のテーマが見つかりません。デフォルトテーマを使用します。`, error);
         // エラー時もデフォルトテーマをキャッシュ
-        themeCache[companyId] = defaultTheme;
-        return defaultTheme;
+        themeCache[companyId] = defaultTheme as CompanyTheme;
+        return defaultTheme as CompanyTheme;
       });
 
     return companyTheme;
   } catch (error) {
     console.error(`法人テーマの読み込みエラー:`, error);
     // エラー時もデフォルトテーマをキャッシュ
-    themeCache[companyId] = defaultTheme;
-    return defaultTheme;
+    themeCache[companyId] = defaultTheme as CompanyTheme;
+    return defaultTheme as CompanyTheme;
+  }
+}
+
+/**
+ * 特定のテーマプロパティのみを取得する（最も軽量な方法）
+ * @param companyId 法人ID
+ * @param property プロパティパス（ドット区切り）
+ * @param defaultValue デフォルト値
+ * @returns プロパティ値
+ */
+export async function getThemeProperty<T>(
+  companyId: string = 'default',
+  property: string,
+  defaultValue: T
+): Promise<T> {
+  // プロパティキャッシュをチェック
+  if (themePropertyCache[companyId]?.[property]) {
+    return themePropertyCache[companyId][property] as T;
+  }
+  
+  try {
+    // 完全なテーマがキャッシュにある場合はそこから取得
+    if (themeCache[companyId]) {
+      const propertyValue = getNestedProperty(themeCache[companyId], property, defaultValue);
+      
+      // プロパティキャッシュに保存
+      if (!themePropertyCache[companyId]) {
+        themePropertyCache[companyId] = {};
+      }
+      themePropertyCache[companyId][property] = propertyValue;
+      
+      return propertyValue;
+    }
+    
+    // デフォルトの場合は直接アクセス
+    if (companyId === 'default') {
+      const propertyValue = getNestedProperty(defaultTheme as CompanyTheme, property, defaultValue);
+      
+      // プロパティキャッシュに保存
+      if (!themePropertyCache['default']) {
+        themePropertyCache['default'] = {};
+      }
+      themePropertyCache['default'][property] = propertyValue;
+      
+      return propertyValue;
+    }
+    
+    // 特定のプロパティのみを動的にインポート（可能な場合）
+    try {
+      // 注: この方法は実際のプロジェクト構造によって異なる場合があります
+      const propertyPath = property.replace(/\./g, '/');
+      const propertyModule = await import(`../companies/${companyId}/themeProperties/${propertyPath}`)
+        .then(module => {
+          const propertyValue = module.default || 
+                               getNestedProperty(defaultTheme as CompanyTheme, property, defaultValue);
+          
+          // プロパティキャッシュに保存
+          if (!themePropertyCache[companyId]) {
+            themePropertyCache[companyId] = {};
+          }
+          themePropertyCache[companyId][property] = propertyValue;
+          
+          return propertyValue;
+        })
+        .catch(() => {
+          // プロパティ別ファイルが見つからない場合は完全なテーマを読み込む
+          return getCompanyTheme(companyId).then(theme => {
+            const propertyValue = getNestedProperty(theme, property, defaultValue);
+            
+            // プロパティキャッシュに保存
+            if (!themePropertyCache[companyId]) {
+              themePropertyCache[companyId] = {};
+            }
+            themePropertyCache[companyId][property] = propertyValue;
+            
+            return propertyValue;
+          });
+        });
+      
+      return propertyModule;
+    } catch (error) {
+      // エラー時は完全なテーマから取得
+      const theme = await getCompanyTheme(companyId);
+      const propertyValue = getNestedProperty(theme, property, defaultValue);
+      
+      // プロパティキャッシュに保存
+      if (!themePropertyCache[companyId]) {
+        themePropertyCache[companyId] = {};
+      }
+      themePropertyCache[companyId][property] = propertyValue;
+      
+      return propertyValue;
+    }
+  } catch (error) {
+    console.error(`テーマプロパティの取得エラー:`, error);
+    return defaultValue;
+  }
+}
+
+/**
+ * ネストされたオブジェクトからプロパティを取得するヘルパー関数
+ * @param obj 対象オブジェクト
+ * @param path プロパティパス（ドット区切り）
+ * @param defaultValue デフォルト値
+ * @returns プロパティ値
+ */
+function getNestedProperty<T>(obj: any, path: string, defaultValue: T): T {
+  const parts = path.split('.');
+  let current = obj;
+  
+  for (const part of parts) {
+    if (current && typeof current === 'object' && part in current) {
+      current = current[part];
+    } else {
+      return defaultValue;
+    }
+  }
+  
+  return (current as unknown as T) || defaultValue;
+}
+
+/**
+ * テーマキャッシュをクリアする（開発環境用）
+ * @param companyId 特定の法人IDのキャッシュをクリアする場合は指定、未指定の場合は全てクリア
+ */
+export function clearThemeCache(companyId?: string) {
+  if (companyId) {
+    delete themeCache[companyId];
+    delete themePropertyCache[companyId];
+    console.log(`法人ID "${companyId}" のテーマキャッシュをクリアしました`);
+  } else {
+    // デフォルトテーマは保持
+    const defaultThemeCopy = themeCache['default'];
+    Object.keys(themeCache).forEach(key => {
+      delete themeCache[key];
+    });
+    themeCache['default'] = defaultThemeCopy;
+    
+    // プロパティキャッシュもクリア
+    Object.keys(themePropertyCache).forEach(key => {
+      if (key !== 'default') {
+        delete themePropertyCache[key];
+      }
+    });
+    
+    console.log('全てのテーマキャッシュをクリアしました（デフォルトテーマを除く）');
+  }
+}
+
+/**
+ * CSSカスタムプロパティとしてテーマを適用する
+ * @param companyId 法人ID
+ * @param element 適用する要素（デフォルトはdocument.documentElement）
+ */
+export async function applyThemeToElement(
+  companyId: string = 'default',
+  element: HTMLElement = document.documentElement
+): Promise<void> {
+  try {
+    const theme = await getCompanyTheme(companyId);
+    
+    // テーマのプロパティをCSSカスタムプロパティとして適用
+    // 主要なプロパティを直接設定
+    element.style.setProperty('--theme-primary-color', theme.colors.primary);
+    element.style.setProperty('--theme-secondary-color', theme.colors.secondary);
+    element.style.setProperty('--theme-accent-color', theme.colors.accent);
+    element.style.setProperty('--theme-background-color', theme.colors.background);
+    element.style.setProperty('--theme-surface-color', theme.colors.surface);
+    element.style.setProperty('--theme-text-color', theme.colors.text.primary);
+    element.style.setProperty('--theme-font-family', theme.typography.fontFamily.base);
+    
+    // チャットウィジェット固有の設定
+    element.style.setProperty('--theme-chat-user-bubble', theme.chatWidget.bubbleColors.user);
+    element.style.setProperty('--theme-chat-assistant-bubble', theme.chatWidget.bubbleColors.assistant);
+    element.style.setProperty('--theme-chat-border-radius', theme.chatWidget.borderRadius);
+    element.style.setProperty('--theme-chat-box-shadow', theme.chatWidget.boxShadow);
+    
+    // テーマが適用されたことを示す属性を設定
+    element.setAttribute('data-theme', companyId);
+    
+    console.log(`法人ID "${companyId}" のテーマを適用しました`);
+  } catch (error) {
+    console.error(`テーマの適用エラー:`, error);
   }
 }
 
@@ -188,58 +481,5 @@ export async function applyCompanyTheme(
     console.log(`法人 "${companyId}" のテーマを適用しました`);
   } catch (error) {
     console.error(`テーマの適用エラー:`, error);
-  }
-}
-
-/**
- * 現在適用されているテーマの特定のプロパティを取得する
- * @param companyId 法人ID
- * @param path プロパティのパス（例: 'colors.primary', 'typography.fontFamily.base'）
- * @param defaultValue デフォルト値
- * @returns プロパティの値
- */
-export async function getThemeProperty(
-  companyId: string = 'default',
-  path: string,
-  defaultValue: any = null
-): Promise<any> {
-  try {
-    const theme = await getCompanyTheme(companyId);
-    
-    // パスに基づいてプロパティを取得
-    const pathParts = path.split('.');
-    let value = theme;
-    
-    for (const part of pathParts) {
-      if (value && typeof value === 'object' && part in value) {
-        value = value[part];
-      } else {
-        return defaultValue;
-      }
-    }
-    
-    return value;
-  } catch (error) {
-    console.error(`テーマプロパティの取得エラー:`, error);
-    return defaultValue;
-  }
-}
-
-/**
- * テーマキャッシュをクリアする（開発環境用）
- * @param companyId 特定の法人IDのキャッシュをクリアする場合は指定、未指定の場合は全てクリア
- */
-export function clearThemeCache(companyId?: string) {
-  if (companyId) {
-    delete themeCache[companyId];
-    console.log(`法人ID "${companyId}" のテーマキャッシュをクリアしました`);
-  } else {
-    // デフォルトテーマは保持
-    const defaultThemeCopy = themeCache['default'];
-    Object.keys(themeCache).forEach(key => {
-      delete themeCache[key];
-    });
-    themeCache['default'] = defaultThemeCopy;
-    console.log('全てのテーマキャッシュをクリアしました（デフォルトテーマを除く）');
   }
 } 

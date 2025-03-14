@@ -53,6 +53,23 @@ JSON形式で以下の情報を返してください:
 ユーザーの発言:
 `;
 
+// ストリーミングレスポンスのエンコーダー
+function createEncoder() {
+  const encoder = new TextEncoder();
+  return (chunk: string) => encoder.encode(chunk);
+}
+
+// ストリーミングレスポンスを作成する関数
+function createStreamResponse(stream: ReadableStream) {
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     // リクエストボディの解析
@@ -64,6 +81,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    
+    // ストリーミングモードの確認
+    const streamMode = body.stream === true;
     
     // 法人IDの取得（リクエストから取得、なければデフォルト）
     const companyId = body.companyId || 'default';
@@ -212,69 +232,171 @@ export async function POST(req: NextRequest) {
     const temperature = companyConfig.apiSettings?.temperature || 0.7;
     const maxTokens = companyConfig.apiSettings?.maxTokens || 1000;
     
-    // OpenAI APIへのリクエスト
-    const response = await openai.chat.completions.create({
-      model: chatModel,
-      messages: messages,
-      temperature: temperature,
-      max_tokens: maxTokens,
-    });
-    
-    // 会話からトピックを抽出（最後の5つのメッセージを使用）
-    let topics: string[] = [];
-    if (messages.length >= 3) {
-      const recentMessages = messages
-        .filter(msg => msg.role !== 'system')
-        .slice(-5)
-        .map(msg => `${msg.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${msg.content}`)
-        .join('\n');
+    // ストリーミングモードの場合
+    if (streamMode) {
+      // ストリーミングレスポンスの作成
+      const stream = new TransformStream();
+      const writer = stream.writable.getWriter();
+      const encode = createEncoder();
       
-      try {
-        // 法人設定からトピック抽出モデルを取得
-        const topicExtractionModel = companyConfig.apiSettings?.topicExtractionModel || 'gpt-3.5-turbo';
-        
-        const topicResponse = await openai.chat.completions.create({
-          model: topicExtractionModel,
-          messages: [
-            { role: 'system', content: TOPIC_EXTRACTION_PROMPT },
-            { role: 'user', content: recentMessages }
-          ],
-          temperature: 0.3,
-          max_tokens: 100,
-        });
-        
-        const topicContent = topicResponse.choices[0].message.content || '';
-        // トピックの抽出（JSON形式の配列を想定）
+      // トピック抽出のための変数
+      let fullResponse = '';
+      let topics: string[] = [];
+      
+      // OpenAI APIへのストリーミングリクエスト
+      const completion = await openai.chat.completions.create({
+        model: chatModel,
+        messages: messages,
+        temperature: temperature,
+        max_tokens: maxTokens,
+        stream: true,
+      });
+      
+      // ストリーミングレスポンスを返す
+      const responsePromise = (async () => {
         try {
-          // 文字列からJSON配列を抽出
-          const match = topicContent.match(/\[.*\]/);
-          if (match) {
-            topics = JSON.parse(match[0]);
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              // レスポンスを蓄積
+              fullResponse += content;
+              
+              // チャンクをクライアントに送信
+              const dataChunk = JSON.stringify({ 
+                type: 'chunk', 
+                content 
+              });
+              await writer.write(encode(`data: ${dataChunk}\n\n`));
+            }
+          }
+          
+          // トピック抽出処理（バックグラウンドで実行）
+          if (messages.length >= 3) {
+            try {
+              // 最近のメッセージを取得
+              const recentMessages = messages
+                .filter(msg => msg.role !== 'system')
+                .slice(-5)
+                .map(msg => `${msg.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${msg.content}`)
+                .join('\n');
+              
+              // 最新の応答を含めたメッセージ
+              const messagesWithResponse = `${recentMessages}\nアシスタント: ${fullResponse}`;
+              
+              // 法人設定からトピック抽出モデルを取得
+              const topicExtractionModel = companyConfig.apiSettings?.topicExtractionModel || 'gpt-3.5-turbo';
+              
+              const topicResponse = await openai.chat.completions.create({
+                model: topicExtractionModel,
+                messages: [
+                  { role: 'system', content: TOPIC_EXTRACTION_PROMPT },
+                  { role: 'user', content: messagesWithResponse }
+                ],
+                temperature: 0.3,
+                max_tokens: 100,
+              });
+              
+              const topicContent = topicResponse.choices[0].message.content || '';
+              // トピックの抽出（JSON形式の配列を想定）
+              try {
+                // 文字列からJSON配列を抽出
+                const match = topicContent.match(/\[.*\]/);
+                if (match) {
+                  topics = JSON.parse(match[0]);
+                }
+              } catch (e) {
+                console.error('トピック抽出エラー:', e);
+              }
+            } catch (e) {
+              console.error('トピック抽出APIエラー:', e);
+            }
+          }
+          
+          // 完了メッセージを送信
+          const completionData = JSON.stringify({ 
+            type: 'complete', 
+            message: { role: 'assistant', content: fullResponse },
+            topics
+          });
+          await writer.write(encode(`data: ${completionData}\n\n`));
+          
+          // ストリームを閉じる
+          await writer.close();
+        } catch (error) {
+          // エラー処理
+          const errorData = JSON.stringify({ 
+            type: 'error', 
+            error: 'エラーが発生しました。もう一度お試しください。' 
+          });
+          await writer.write(encode(`data: ${errorData}\n\n`));
+          await writer.close();
+          console.error('ストリーミングエラー:', error);
+        }
+      })();
+      
+      // ストリーミングレスポンスを返す
+      return createStreamResponse(stream.readable);
+    } 
+    // 通常モード（ストリーミングなし）
+    else {
+      // OpenAI APIへのリクエスト
+      const response = await openai.chat.completions.create({
+        model: chatModel,
+        messages: messages,
+        temperature: temperature,
+        max_tokens: maxTokens,
+      });
+      
+      // 会話からトピックを抽出（最後の5つのメッセージを使用）
+      let topics: string[] = [];
+      if (messages.length >= 3) {
+        const recentMessages = messages
+          .filter(msg => msg.role !== 'system')
+          .slice(-5)
+          .map(msg => `${msg.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${msg.content}`)
+          .join('\n');
+        
+        try {
+          // 法人設定からトピック抽出モデルを取得
+          const topicExtractionModel = companyConfig.apiSettings?.topicExtractionModel || 'gpt-3.5-turbo';
+          
+          const topicResponse = await openai.chat.completions.create({
+            model: topicExtractionModel,
+            messages: [
+              { role: 'system', content: TOPIC_EXTRACTION_PROMPT },
+              { role: 'user', content: recentMessages }
+            ],
+            temperature: 0.3,
+            max_tokens: 100,
+          });
+          
+          const topicContent = topicResponse.choices[0].message.content || '';
+          // トピックの抽出（JSON形式の配列を想定）
+          try {
+            // 文字列からJSON配列を抽出
+            const match = topicContent.match(/\[.*\]/);
+            if (match) {
+              topics = JSON.parse(match[0]);
+            }
+          } catch (e) {
+            console.error('トピック抽出エラー:', e);
           }
         } catch (e) {
-          console.error('トピック抽出エラー:', e);
-          // エラーが発生した場合は空の配列を使用
-          topics = [];
+          console.error('トピック抽出APIエラー:', e);
         }
-      } catch (e) {
-        console.error('トピック抽出APIエラー:', e);
       }
+      
+      // レスポンスの返却
+      return NextResponse.json({
+        message: response.choices[0].message,
+        topics,
+        ambiguousExpression: ambiguousExpression.detected ? ambiguousExpression : null
+      });
     }
-    
-    // レスポンスの返却
-    return NextResponse.json({
-      message: response.choices[0].message,
-      usage: response.usage,
-      topics: topics,
-      ambiguousExpression: ambiguousExpression,
-      companyId: companyId  // レスポンスに法人IDを含める
-    });
-    
-  } catch (error: any) {
-    console.error('Error in chat API:', error);
-    
+  } catch (error) {
+    console.error('APIエラー:', error);
     return NextResponse.json(
-      { error: `エラーが発生しました: ${error.message}` },
+      { error: 'サーバーエラーが発生しました。' },
       { status: 500 }
     );
   }
