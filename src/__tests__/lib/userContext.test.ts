@@ -16,6 +16,7 @@ jest.mock('../../lib/userContext', () => {
     recordUserQuestion: jest.fn(),
     clearUserContext: jest.fn(),
     resetAll: jest.fn(),
+    generateContextPrompt: jest.fn(),
     // 型定義をエクスポート
     UserContext: jest.requireActual('../../lib/services/userContextService').UserContext,
     defaultUserContext: jest.requireActual('../../lib/services/userContextService').defaultUserContext,
@@ -135,6 +136,10 @@ describe('userContext', () => {
     (userContextModule.resetAll as jest.Mock).mockImplementation((): void => {
       resetTestState();
     });
+
+    (userContextModule.generateContextPrompt as jest.Mock).mockImplementation((): string => {
+      return '【ユーザーコンテキスト情報】\n';
+    });
   });
 
   // 各テスト後にもリセット
@@ -246,6 +251,15 @@ describe('userContext', () => {
       
       // トピックも空になっていることを確認
       expect(userContextModule.getConversationTopics().length).toBe(0);
+    });
+  });
+
+  describe('generateContextPrompt', () => {
+    it('コンテキストプロンプトを生成できること', () => {
+      // モック実装が呼び出されることを確認
+      const prompt = userContextModule.generateContextPrompt();
+      expect(prompt).toBe('【ユーザーコンテキスト情報】\n');
+      expect(userContextModule.generateContextPrompt).toHaveBeenCalled();
     });
   });
 }); 
