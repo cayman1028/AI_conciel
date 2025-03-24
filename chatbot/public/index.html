@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チャットボットデモ</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .demo-section {
+      margin-top: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    #chat-container {
+      min-height: 300px;
+      border: 1px solid #eee;
+      border-radius: 5px;
+      padding: 10px;
+      position: relative;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>チャットボットデモ</h1>
+    <p>このページはチャットボットのデモンストレーション用です。</p>
+    
+    <div class="demo-section">
+      <h2>チャットボット埋め込みデモ</h2>
+      <div id="chat-container"></div>
+    </div>
+    
+    <div class="demo-section">
+      <h2>使用方法</h2>
+      <p>以下のコードをあなたのウェブサイトに追加してチャットボットを埋め込みます：</p>
+      <pre><code>&lt;script src="./chatbot.umd.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  document.addEventListener('DOMContentLoaded', function() {
+    initChatBot({
+      targetElement: document.getElementById('your-container-id'),
+      greeting: 'こんにちは！何かお手伝いできることはありますか？'
+    });
+  });
+&lt;/script&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- チャットボットスクリプトを読み込み -->
+  <script src="./chatbot.umd.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof initChatBot === 'function') {
+        initChatBot({
+          targetElement: document.getElementById('chat-container'),
+          greeting: 'こんにちは！何かお手伝いできることはありますか？'
+        });
+        console.log('チャットボットが初期化されました');
+      } else {
+        console.error('チャットボットの初期化関数が見つかりません');
+        document.getElementById('chat-container').innerHTML = '<p style="color:red">エラー: チャットボットの初期化関数が見つかりません</p>';
+      }
+    });
+  </script>
+</body>
+</html> 
