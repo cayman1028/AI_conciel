@@ -1,98 +1,113 @@
+import { fireEvent } from '@testing-library/dom';
+import '@testing-library/jest-dom';
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
 
-describe('ChatBot Embed Script', () => {
-  let divElements: HTMLDivElement[] = [];
-  let scriptElements: HTMLScriptElement[] = [];
-  let appendedElements: HTMLElement[] = [];
-  
+// モック
+jest.mock('react-dom/client', () => ({
+  createRoot: jest.fn(() => ({
+    render: jest.fn()
+  }))
+}));
+
+jest.mock('react', () => ({
+  createElement: jest.fn()
+}));
+
+jest.mock('../components/ChatBot/ChatBot', () => 'ChatBot');
+
+describe('embed.ts', () => {
+  let documentAddEventListenerSpy: jest.SpyInstance;
+  let documentCreateElementSpy: jest.SpyInstance;
+  let bodyAppendChildSpy: jest.SpyInstance;
+  let dispatchEventSpy: jest.SpyInstance;
+
   beforeEach(() => {
-    // 要素作成と追加のトラッキング用配列をクリア
-    divElements = [];
-    scriptElements = [];
-    appendedElements = [];
+    // DOMスパイをセットアップ
+    documentAddEventListenerSpy = jest.spyOn(document, 'addEventListener');
+    documentCreateElementSpy = jest.spyOn(document, 'createElement');
+    bodyAppendChildSpy = jest.spyOn(document.body, 'appendChild');
+    dispatchEventSpy = jest.spyOn(window, 'dispatchEvent');
     
-    // createElement のモック
-    const originalCreateElement = document.createElement;
-    document.createElement = jest.fn().mockImplementation((tagName: string) => {
-      if (tagName === 'div') {
-        const mockDiv = {
-          id: '',
-          setAttribute: jest.fn(),
-          appendChild: jest.fn()
-        } as unknown as HTMLDivElement;
-        divElements.push(mockDiv);
-        return mockDiv;
-      }
-      if (tagName === 'script') {
-        const mockScript = {
-          src: '',
-          setAttribute: jest.fn()
-        } as unknown as HTMLScriptElement;
-        scriptElements.push(mockScript);
-        return mockScript;
-      }
-      return originalCreateElement.call(document, tagName);
-    });
-    
-    // appendChild のモック
-    document.body.appendChild = jest.fn().mockImplementation((element: HTMLElement) => {
-      appendedElements.push(element);
-      return element;
-    });
-    
-    // initChatBot のグローバル定義を削除
-    delete (window as any).initChatBot;
-  });
-  
-  afterEach(() => {
     // モックをリセット
-    jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
-  
-  it('スクリプトが読み込まれると、グローバル初期化関数が定義される', () => {
-    // スクリプトを読み込む
-    jest.isolateModules(() => {
+
+  afterEach(() => {
+    // スパイをリストア
+    documentAddEventListenerSpy.mockRestore();
+    documentCreateElementSpy.mockRestore();
+    bodyAppendChildSpy.mockRestore();
+    dispatchEventSpy.mockRestore();
+  });
+
+  describe('初期化', () => {
+    test('DOMContentLoadedイベントリスナーが登録されること', () => {
+      // モジュールをインポート
+      require('./embed');
+      
+      // DOMContentLoadedイベントリスナーが登録されていることを確認
+      expect(documentAddEventListenerSpy).toHaveBeenCalledWith(
+        'DOMContentLoaded',
+        expect.any(Function)
+      );
+    });
+
+    test('initChatBot関数がグローバルスコープに登録されること', () => {
+      // モジュールをインポート
+      require('./embed');
+      
+      // グローバル関数が定義されていることを確認
+      expect(window).toHaveProperty('initChatBot');
+    });
+  });
+
+  describe('initChatBot関数', () => {
+    beforeEach(() => {
+      // モジュールをインポートして初期化関数を取得
       require('./embed');
     });
-    
-    // 初期化関数が定義されていることを確認
-    expect(window).toHaveProperty('initChatBot');
-    expect(typeof (window as any).initChatBot).toBe('function');
-  });
-  
-  it('初期化関数を呼び出すと、チャットボットコンテナがDOMに追加される', () => {
-    // スクリプトを読み込む
-    jest.isolateModules(() => {
-      require('./embed');
+
+    test('コンテナ要素が作成されDOMに追加されること', () => {
+      // 初期化関数を実行
+      (window as any).initChatBot();
+      
+      // DOMエレメントが作成されたか確認
+      expect(documentCreateElementSpy).toHaveBeenCalledWith('div');
+      expect(bodyAppendChildSpy).toHaveBeenCalled();
     });
-    
-    // 初期化関数を呼び出す
-    (window as any).initChatBot();
-    
-    // divが作成されたことを確認
-    expect(document.createElement).toHaveBeenCalledWith('div');
-    expect(divElements.length).toBeGreaterThan(0);
-    
-    // bodyに追加されたことを確認
-    expect(document.body.appendChild).toHaveBeenCalled();
-    expect(appendedElements.length).toBeGreaterThan(0);
-  });
-  
-  it('法人ごとの設定でも正しく動作する', () => {
-    // スクリプトを読み込む
-    jest.isolateModules(() => {
-      require('./embed');
+
+    test('Reactコンポーネントがレンダリングされること', () => {
+      // 初期化関数を実行
+      (window as any).initChatBot();
+      
+      // Reactのレンダリングが実行されたか確認
+      expect(createRoot).toHaveBeenCalled();
+      expect(React.createElement).toHaveBeenCalledWith('ChatBot');
     });
+
+    test('ChatBotLoadedイベントが発火されること', () => {
+      // 初期化関数を実行
+      (window as any).initChatBot();
+      
+      // カスタムイベントが発火されたか確認
+      expect(dispatchEventSpy).toHaveBeenCalled();
+      expect(dispatchEventSpy.mock.calls[0][0].type).toBe('ChatBotLoaded');
+    });
+  });
+
+  test('DOMContentLoadedイベント発火時にinitChatBot関数が呼ばれること', () => {
+    // モジュールをインポート
+    require('./embed');
     
-    // 初期化関数を呼び出す
-    (window as any).initChatBot();
+    // initChatBot関数をスパイ
+    const initChatBotSpy = jest.spyOn(window as any, 'initChatBot');
     
-    // 要素が作成され追加されたことを確認
-    expect(document.createElement).toHaveBeenCalledWith('div');
-    expect(document.body.appendChild).toHaveBeenCalled();
+    // DOMContentLoadedイベントをシミュレート
+    const domLoadedEvent = new Event('DOMContentLoaded');
+    fireEvent(document, domLoadedEvent);
     
-    // イベントが発火することを確認
-    const eventSpy = jest.spyOn(window, 'dispatchEvent');
-    window.dispatchEvent(new Event('ChatBotLoaded'));
-    expect(eventSpy).toHaveBeenCalled();
+    // initChatBot関数が呼ばれたことを確認
+    expect(initChatBotSpy).toHaveBeenCalled();
   });
 }); 

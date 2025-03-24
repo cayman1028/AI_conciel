@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { chatbotConfig } from '../../config/chatbotConfig';
+import { useTranslation } from '../../i18n/i18n';
 import { Message } from './types';
 import { findBestResponse } from './utils';
 
 const ChatBot: React.FC = () => {
+  // 多言語対応
+  const { translations, currentLanguage, setLanguage } = useTranslation();
+  
   // メッセージの状態管理
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -36,7 +40,7 @@ const ChatBot: React.FC = () => {
       const botResponse = findBestResponse(
         userMessage.text,
         chatbotConfig.responses,
-        chatbotConfig.defaultResponse
+        translations.defaultResponse || chatbotConfig.defaultResponse
       );
       
       const botMessage: Message = {
@@ -48,6 +52,11 @@ const ChatBot: React.FC = () => {
       
       setMessages(prevMessages => [...prevMessages, botMessage]);
     }, 500); // 少し遅延を入れてより自然な会話に
+  };
+  
+  // 言語切り替えハンドラ
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang);
   };
   
   // エンターキーでメッセージ送信
@@ -123,12 +132,72 @@ const ChatBot: React.FC = () => {
   });
   
   return (
-    <div data-testid="chatbot-container" style={containerStyle}>
-      <div style={headerStyle}>
-        {chatbotConfig.title}
+    <div className="chatbot-container" style={{
+      width: chatbotConfig.width,
+      height: chatbotConfig.height,
+      position: 'fixed' as 'fixed',
+      bottom: chatbotConfig.bottom,
+      right: chatbotConfig.right,
+      backgroundColor: '#ffffff',
+      borderRadius: chatbotConfig.borderRadius,
+      boxShadow: chatbotConfig.boxShadow,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      fontFamily: chatbotConfig.fontFamily,
+      fontSize: chatbotConfig.fontSize
+    }}>
+      {/* チャットボットヘッダー */}
+      <div className="chatbot-header" style={{
+        backgroundColor: chatbotConfig.primaryColor,
+        color: 'white',
+        padding: '10px 15px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <h3 style={{ margin: 0 }}>{translations.title || chatbotConfig.title}</h3>
+        <div className="language-selector">
+          <button
+            onClick={() => handleLanguageChange('ja')}
+            style={{
+              backgroundColor: currentLanguage === 'ja' ? '#ffffff' : 'transparent',
+              color: currentLanguage === 'ja' ? chatbotConfig.primaryColor : '#ffffff',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              marginRight: '5px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            JP
+          </button>
+          <button
+            onClick={() => handleLanguageChange('en')}
+            style={{
+              backgroundColor: currentLanguage === 'en' ? '#ffffff' : 'transparent',
+              color: currentLanguage === 'en' ? chatbotConfig.primaryColor : '#ffffff',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            EN
+          </button>
+        </div>
       </div>
       
-      <div data-testid="chatbot-messages" style={messagesContainerStyle}>
+      {/* メッセージ表示エリア */}
+      <div className="chatbot-messages" style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '15px',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         {messages.map(message => (
           <div 
             key={message.id}
@@ -148,7 +217,7 @@ const ChatBot: React.FC = () => {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder={chatbotConfig.placeholder}
+          placeholder={translations.placeholder || chatbotConfig.placeholder}
           style={inputStyle}
         />
         <button
@@ -156,7 +225,44 @@ const ChatBot: React.FC = () => {
           onClick={handleSendMessage}
           style={buttonStyle}
         >
-          {chatbotConfig.sendButtonText}
+          {translations.sendButtonText || chatbotConfig.sendButtonText}
+        </button>
+      </div>
+      
+      {/* 言語切り替えボタン */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        padding: '5px', 
+        borderTop: '1px solid #e0e0e0' 
+      }}>
+        <button
+          onClick={() => handleLanguageChange('ja')}
+          style={{
+            backgroundColor: currentLanguage === 'ja' ? chatbotConfig.primaryColor : '#f0f0f0',
+            color: currentLanguage === 'ja' ? 'white' : '#333',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '3px 6px',
+            margin: '0 5px',
+            cursor: 'pointer'
+          }}
+        >
+          日本語
+        </button>
+        <button
+          onClick={() => handleLanguageChange('en')}
+          style={{
+            backgroundColor: currentLanguage === 'en' ? chatbotConfig.primaryColor : '#f0f0f0',
+            color: currentLanguage === 'en' ? 'white' : '#333',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '3px 6px',
+            margin: '0 5px',
+            cursor: 'pointer'
+          }}
+        >
+          English
         </button>
       </div>
     </div>

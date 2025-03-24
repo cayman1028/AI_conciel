@@ -1,0 +1,15 @@
+# .vercelignore
+node_modules
+.git
+.github
+src/__tests__
+src/ci-cd/__tests__
+*.test.ts
+*.test.tsx
+jest.config.js
+jest.setup.js
+coverage
+.editorconfig
+.eslintrc.cjs
+README.md
+*.log 
