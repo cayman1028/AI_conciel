@@ -7,7 +7,7 @@
 	"features": {
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/wxw-matt/devcontainer-features/command_runner:0": {},
-		"ghcr.io/nikiforovall/devcontainer-features/dotnet-csharpier:1": {},
+		"ghcr.io/nikiforovall/devcontainer-features/dotnet-csharpier:2": {},
 		"ghcr.io/devcontainers-extra/features/prettier:1": {}
 	}
 
